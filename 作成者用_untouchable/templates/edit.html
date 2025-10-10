@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>記録編集 - {{ app_name }}</title>
+
+    <!-- フィルターの日付選択でのみ使用 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/edit.css') }}">
+</head>
+<body>
+    <header class="edit-header">
+        <h1><a href="/?mode=admin">＜</a> 記録編集</h1>
+    </header>
+
+    <main class="edit-main">
+        <section class="card filter-section">
+            <h2>フィルター</h2> <!-- ★★★ 追加 ★★★ -->
+            <div class="filter-controls">
+                <input type="text" id="filter-period" placeholder="期間を選択">
+                <input type="text" id="filter-name" placeholder="氏名で検索">
+                <select id="filter-grade"><option value="">学年</option></select>
+                <select id="filter-class"><option value="">組</option></select>
+                <select id="filter-number"><option value="">番号</option></select>
+                <button id="filter-btn">絞り込み</button>
+                <button id="reset-filter-btn">リセット</button>
+            </div>
+            <button id="add-new-log-btn" class="enter-btn">新規記録を追加</button>
+        </section>
+
+        <section class="card log-list-section">
+            <h2>記録一覧</h2> <!-- ★★★ 追加 ★★★ -->
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th data-sort="id">ID ▼</th>
+                            <th data-sort="entry_time">日付</th>
+                            <th data-sort="grade">学年</th>
+                            <th data-sort="class">組</th>
+                            <th data-sort="student_number">番号</th>
+                            <th data-sort="name">氏名</th>
+                            <th data-sort="entry_time">入室時刻</th>
+                            <th data-sort="exit_time">退室時刻</th>
+                            <th>滞在時間</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logs-table-body"></tbody>
+                </table>
+            </div>
+            <div class="pagination">
+                <button id="prev-page-btn" disabled>＜ 前へ</button>
+                <span id="page-info">1 / 1 ページ</span>
+                <button id="next-page-btn" disabled>次へ ＞</button>
+            </div>
+        </section>
+    </main>
+
+    <div id="edit-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h2 id="modal-title">新規記録の追加</h2>
+            <form id="edit-form">
+                <input type="hidden" id="edit-log-id">
+                <div class="form-group">
+                    <label>生徒</label>
+                    <div class="modal-selectors">
+                        <select id="modal-grade-select" required><option value="">学年</option></select>
+                        <select id="modal-class-select" disabled required><option value="">組</option></select>
+                        <select id="modal-number-select" disabled required><option value="">番号</option></select>
+                    </div>
+                    <div id="modal-student-name" class="modal-student-name-display"></div>
+                </div>
+                <div class="form-group">
+                    <label for="edit-entry-time">入室時刻</label>
+                    <input type="datetime-local" id="edit-entry-time" class="native-datetime" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-exit-time">退室時刻</label>
+                    <input type="datetime-local" id="edit-exit-time" class="native-datetime">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" id="modal-cancel-btn">キャンセル</button>
+                    <button type="submit" id="modal-save-btn" class="enter-btn">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://npmcdn.com/flatpickr/dist/l10n/ja.js"></script>
+    <script src="{{ url_for('static', filename='js/edit.js') }}"></script>
+</body>
+</html>
+

@@ -3,8 +3,7 @@ import pandas as pd
 import glob
 import os
 
-# ★★★ 修正: シンプルな相対パスに戻す ★★★
-# バッチファイルで .../py フォルダに移動してから実行されることを前提とする
+# バッチファイルで .../py フォルダに移動してから実行されることを前提とする相対パス
 DB_PATH = os.path.join('..', 'students.db') 
 STUDENT_EXCEL_PATH_PATTERN = os.path.join('..', '..', '管理者用_touchable', '生徒情報_*.xlsx')
 PHRASES_EXCEL_PATH = os.path.join('..', '..', '管理者用_touchable', 'motivational_phrases.xlsx')
@@ -90,10 +89,8 @@ def import_phrases_from_excel(conn):
 
 
 def init_db():
-    # Flask開発サーバーの再起動時に二重実行されるのを防ぐ
-    if os.environ.get("WERKZEUG_RUN_MAIN") != "true":
-        return
-        
+    # ★★★ 修正: 二重実行防止のチェックを削除 ★★★
+    # init_db()はapp.pyの起動時に一度だけ呼ばれるので、このチェックは不要かつ有害だった
     db_abs_path = os.path.abspath(DB_PATH)
     if not os.path.exists(db_abs_path):
         print("データベースファイルが見つからないため、初期化を開始します...")
