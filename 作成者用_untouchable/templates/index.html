@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="{{ app_name }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/icon.png') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://npmcdn.com/flatpickr/dist/l10n/ja.js"></script>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <title>{{ app_name }}</title>
+</head>
+<body>
+    <header class="fixed-header">
+        <div class="header-main">
+            <h1>{{ app_name }}</h1>
+            <div id="current-time" class="header-time">--/-- (--) --:--:--</div>
+        </div>
+        {% if mode == 'admin' %}
+        <div class="header-controls">
+            <div class="report-section">
+                <input type="text" id="report-period" placeholder="期間を選択">
+                <button id="create-report-btn" class="header-btn">集計レポート作成</button>
+            </div>
+            <div class="nav-buttons">
+                <button onclick="location.href='/?mode=edit'" class="header-btn">記録編集</button>
+                <button onclick="location.href='/?mode=settings'" class="header-btn">設定</button>
+            </div>
+        </div>
+        {% endif %}
+
+        <section class="manual-entry-form">
+            <h2>手動で入退室</h2>
+            <div class="entry-container">
+                <div class="selectors">
+                    <div class="selector-item">
+                        <label for="grade-select">学年</label>
+                        <select id="grade-select" class="styled-select"></select>
+                    </div>
+                    <div class="selector-item">
+                        <label for="class-select">組</label>
+                        <select id="class-select" class="styled-select" disabled></select>
+                    </div>
+                    <div class="selector-item">
+                        <label for="number-select">番号</label>
+                        <select id="number-select" class="styled-select" disabled></select>
+                    </div>
+                    <div class="selector-item" id="seat-selector-item" style="display: none;">
+                        <label for="seat-select">座席番号</label> <select id="seat-select" class="styled-select"></select>
+                    </div>
+                    <div class="selector-item" id="student-name-container" style="display: none;">
+                        <label>氏名</label> <div id="student-name-display" class="student-name"></div>
+                    </div>
+                </div>
+                <div id="action-button-container"></div>
+            </div>
+        </section>
+
+        <div class="list-header">
+            {% if mode == 'admin' %}
+                <h2>本日の入室者リスト</h2>
+                <button id="exit-all-btn" class="danger-btn">全員退室</button>
+            {% else %}
+                <h2>手動入室者リスト</h2>
+            {% endif %}
+        </div>
+    </header>
+
+    <main>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>学年</th>
+                        <th>組</th>
+                        <th>番号</th>
+                        <th>座席</th>
+                        <th>氏名</th>
+                        <th>入室</th>
+                        <th>滞在時間</th>
+                        <th>退室</th>
+                    </tr>
+                </thead>
+                <tbody id="attendance-table-body">
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    {% if mode == 'admin' %}
+        <input type="text" id="qr-input" class="qr-input-hidden" autocomplete="off">
+    {% endif %}
+
+    <div id="toast-container"></div>
+
+    <script>
+        const APP_MODE = {{ mode | tojson }};
+        const MAX_SEAT_NUMBER = {{ max_seat_number | tojson }};
+    </script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

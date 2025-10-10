@@ -1,0 +1,155 @@
+/* --- 全体のスタイル --- */
+:root {
+    --primary-color: #4a90e2;
+    --secondary-color: #f5f7fa;
+    --text-color: #333;
+    --header-bg: #ffffff;
+    --border-color: #dce1e6;
+    --danger-color: #d9534f;
+    --font-family: 'Helvetica Neue', 'Arial', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Meiryo', sans-serif;
+}
+
+html, body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+}
+
+body {
+    font-family: var(--font-family);
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+    display: flex;
+    flex-direction: column;
+}
+
+/* --- ヘッダー (固定エリア) --- */
+.fixed-header {
+    background-color: var(--header-bg);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 10px 20px;
+    box-sizing: border-box;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    flex-shrink: 0;
+}
+.header-main { display: flex; justify-content: space-between; align-items: center; }
+.header-main h1 { margin: 0; font-size: 1.8em; color: var(--primary-color); }
+.header-time { font-size: 1.2em; font-weight: bold; }
+.header-controls { display: flex; justify-content: space-between; align-items: center; }
+.report-section, .nav-buttons { display: flex; align-items: center; gap: 10px; }
+.header-btn, #create-report-btn { padding: 8px 15px; border: none; border-radius: 5px; background-color: var(--primary-color); color: white; font-size: 0.9em; cursor: pointer; transition: background-color 0.2s; }
+.header-btn:hover, #create-report-btn:hover { background-color: #357abd; }
+#report-period { padding: 8px; border: 1px solid var(--border-color); border-radius: 5px; min-width: 160px; }
+
+/* --- メインコンテンツ (スクロールエリア) --- */
+main {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 0 20px 20px 20px;
+    min-height: 0;
+}
+
+h2 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    color: var(--primary-color);
+    font-size: 1.2em;
+    border-bottom: 2px solid var(--primary-color);
+}
+
+
+/* --- 手動入室フォーム (ヘッダー内) --- */
+.manual-entry-form { padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; }
+.manual-entry-form h2 { margin-bottom: 15px; }
+.entry-container { display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+
+.manual-entry-form .selectors { 
+    display: flex; 
+    gap: 10px;
+    align-items: flex-end; 
+    flex-wrap: wrap;
+}
+
+#action-button-container {
+    margin-bottom: 10px; 
+}
+
+/* ★★★ 修正箇所 ★★★ */
+.selector-item {
+    /* flexコンテナである必要はなくなったので削除 */
+}
+.selector-item label {
+    display: block; /* ラベルをブロック要素にして、必ず改行させる */
+    font-size: 0.8em;
+    color: #666;
+    margin-bottom: 4px;
+    padding-left: 2px;
+}
+
+.styled-select { padding: 10px; border: 1px solid var(--border-color); border-radius: 5px; font-size: 1em; min-width: 80px; }
+.styled-select:disabled { background-color: #f0f0f0; cursor: not-allowed; }
+.student-name { font-size: 1.2em; font-weight: bold; min-height: 40px; display: flex; align-items: center; box-sizing: border-box; }
+#action-button-container button { padding: 12px 25px; font-size: 1.1em; border-radius: 5px; border: none; color: white; cursor: pointer; transition: background-color 0.2s; white-space: nowrap; }
+.enter-btn { background-color: #28a745; }
+.enter-btn:hover { background-color: #218838; }
+.exit-btn { background-color: var(--danger-color); }
+.exit-btn:hover { background-color: #c82333; }
+
+/* --- 入室者リスト --- */
+.list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 10px; 
+}
+.list-header h2 {
+    border-bottom: none;
+}
+.danger-btn { background-color: var(--danger-color); color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; transition: background-color 0.2s; }
+.danger-btn:hover { background-color: #c82333; }
+
+.table-container {
+    overflow-y: auto;
+    background-color: white;
+    border-radius: 8px;
+    height: 100%;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+thead th {
+    background-color: #f2f2f2;
+    position: sticky;
+    top: -1px;
+    z-index: 10;
+}
+.exited-row { text-decoration: line-through; color: #888; }
+.exited-row .action-cell { text-decoration: none; }
+.action-cell button { background-color: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); padding: 5px 10px; border-radius: 5px; cursor: pointer; }
+.action-cell button:hover { background-color: var(--primary-color); color: white; }
+.undo-btn { border-color: #ffc107; color: #ffc107; }
+.undo-btn:hover { background-color: #ffc107; color: white; }
+
+/* --- QRコード用隠し入力欄 --- */
+.qr-input-hidden { position: absolute; left: -9999px; opacity: 0; }
+
+/* --- 通知 (トースト) --- */
+#toast-container { position: fixed; top: 20px; right: 20px; z-index: 2000; }
+.toast { background-color: #333; color: white; padding: 15px; border-radius: 5px; margin-bottom: 10px; opacity: 0; transform: translateX(100%); transition: all 0.5s ease-in-out; }
+.toast.show { opacity: 1; transform: translateX(0); }
+.toast.gold { background-color: gold; color: black; border: 2px solid darkgoldenrod; }
+.toast.silver { background-color: silver; color: black; border: 2px solid dimgray; }
+.toast.bronze { background-color: #cd7f32; color: white; border: 2px solid saddlebrown; }

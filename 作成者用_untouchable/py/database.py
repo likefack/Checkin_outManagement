@@ -1,0 +1,112 @@
+import sqlite3
+import pandas as pd
+import glob
+import os
+
+# ★★★ 修正: シンプルな相対パスに戻す ★★★
+# バッチファイルで .../py フォルダに移動してから実行されることを前提とする
+DB_PATH = os.path.join('..', 'students.db') 
+STUDENT_EXCEL_PATH_PATTERN = os.path.join('..', '..', '管理者用_touchable', '生徒情報_*.xlsx')
+PHRASES_EXCEL_PATH = os.path.join('..', '..', '管理者用_touchable', 'motivational_phrases.xlsx')
+
+def get_student_excel_path():
+    files = glob.glob(STUDENT_EXCEL_PATH_PATTERN)
+    return files[0] if files else None
+
+def create_tables(conn):
+    cursor = conn.cursor()
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS students (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, system_id INTEGER UNIQUE NOT NULL, enrollment_year INTEGER,
+        grade INTEGER, class INTEGER, student_number INTEGER, name TEXT, guardian_email TEXT,
+        is_present INTEGER DEFAULT 0, current_log_id INTEGER, title TEXT, last_phrase_id INTEGER DEFAULT 0
+    )
+    ''')
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS attendance_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        system_id INTEGER NOT NULL,
+        entry_time TEXT,
+        exit_time TEXT, 
+        seat_number INTEGER, 
+        FOREIGN KEY (system_id) REFERENCES students(system_id)
+    )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_system_id ON attendance_logs(system_id)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_entry_time ON attendance_logs(entry_time)')
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS phrases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, category TEXT, text TEXT NOT NULL, author TEXT, lifespan TEXT
+    )
+    ''')
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS achievements_tracker (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        system_id INTEGER NOT NULL,
+        code TEXT NOT NULL,
+        achieved_at DATE NOT NULL, 
+        context TEXT, 
+        FOREIGN KEY (system_id) REFERENCES students(system_id)
+    )
+    ''')
+    conn.commit()
+    print("データベースのテーブルを定義しました。")
+
+def import_students_from_excel(conn):
+    student_excel_file = get_student_excel_path()
+    if not student_excel_file:
+        raise FileNotFoundError(f"生徒情報Excelファイルが見つかりません。検索パターン: {STUDENT_EXCEL_PATH_PATTERN}")
+
+    df = pd.read_excel(student_excel_file, engine='openpyxl')
+    df.columns = df.columns.str.strip()
+    df.rename(columns={
+        'システムID': 'system_id', '入学年度': 'enrollment_year', '学年': 'grade',
+        '組': 'class', '番号': 'student_number', '生徒氏名': 'name', 'メールアドレス': 'guardian_email'
+    }, inplace=True)
+    required_cols = ['system_id', 'enrollment_year', 'grade', 'class', 'student_number', 'name', 'guardian_email']
+    if not all(col in df.columns for col in required_cols):
+        missing = [col for col in required_cols if col not in df.columns]
+        raise ValueError(f"Excelに必要なカラムがありません: {missing}")
+
+    df_students = df[required_cols].copy()
+    for col in ['system_id', 'enrollment_year', 'grade', 'class', 'student_number']:
+        df_students[col] = pd.to_numeric(df_students[col], errors='coerce')
+    df_students.dropna(subset=['system_id'], inplace=True)
+    for col in ['system_id', 'enrollment_year', 'grade', 'class', 'student_number']:
+         df_students[col] = df_students[col].astype(int)
+
+    df_students.to_sql('students', conn, if_exists='append', index=False)
+    print(f"'{os.path.basename(student_excel_file)}' から生徒情報をインポートしました。")
+
+
+def import_phrases_from_excel(conn):
+    if not os.path.exists(PHRASES_EXCEL_PATH): return
+    df = pd.read_excel(PHRASES_EXCEL_PATH, engine='openpyxl')
+    df['lifespan'] = df.apply(lambda row: f"({row['生年']} - {row['没年']})" if pd.notna(row['生年']) else None, axis=1)
+    df.rename(columns={'属性': 'category', 'phrase': 'text', '発信者': 'author'}, inplace=True)
+    df_phrases = df[['category', 'text', 'author', 'lifespan']]
+    df_phrases.sample(frac=1).reset_index(drop=True).to_sql('phrases', conn, if_exists='append', index=False)
+    print(f"'{os.path.basename(PHRASES_EXCEL_PATH)}' からフレーズをインポートしました。")
+
+
+def init_db():
+    # Flask開発サーバーの再起動時に二重実行されるのを防ぐ
+    if os.environ.get("WERKZEUG_RUN_MAIN") != "true":
+        return
+        
+    db_abs_path = os.path.abspath(DB_PATH)
+    if not os.path.exists(db_abs_path):
+        print("データベースファイルが見つからないため、初期化を開始します...")
+        try:
+            conn = sqlite3.connect(db_abs_path)
+            create_tables(conn)
+            import_students_from_excel(conn)
+            import_phrases_from_excel(conn)
+            conn.close()
+            print("データベースの初期化が完了しました。")
+        except Exception as e:
+            print(f"!!! データベース初期化中に致命的なエラーが発生しました: {e} !!!")
+            if 'conn' in locals() and conn: conn.close()
+            if os.path.exists(db_abs_path): os.remove(db_abs_path)
+            raise e
+
