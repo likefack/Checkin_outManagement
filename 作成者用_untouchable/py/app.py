@@ -4,6 +4,7 @@ import datetime
 import pytz 
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
+# 修正: init_dbではなくモジュール全体をインポート
 import database 
 from report_generator import create_report
 from achievement_logic import check_achievements
@@ -17,12 +18,17 @@ app = Flask(__name__,
             template_folder=os.path.join(os.path.dirname(__file__), '..', 'templates'),
             static_folder=os.path.join(os.path.dirname(__file__), '..', 'static'))
 
+# ★★★ 修正: サーバー起動時にDB初期化を一度だけ実行する ★★★
+with app.app_context():
+    database.init_db()
+
 # --- タイムゾーン定義 ---
 JST = pytz.timezone('Asia/Tokyo')
 UTC = pytz.utc
 
 # --- データベース接続 ---
 def get_db_connection():
+    # database.pyで定義された相対パスを使用
     conn = sqlite3.connect(database.DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
     conn.row_factory = sqlite3.Row
     return conn
@@ -44,7 +50,7 @@ def _handle_notifications(conn, system_id, event_type, log_id):
     sender_name = os.getenv('SENDER_NAME')
     log_entry = conn.execute('SELECT entry_time, exit_time FROM attendance_logs WHERE id = ?', (log_id,)).fetchone()
     
-    guardian_message = ach_result.get('guardian_message') if ach_result else ""
+    guardian_message = ach_result.get('guardian_message', "") # メッセージがない場合は空文字列
 
     if event_type == 'check_in':
         entry_time_jst = parse_db_time_to_jst(log_entry['entry_time'])
@@ -68,48 +74,11 @@ def _handle_notifications(conn, system_id, event_type, log_id):
             
     return ach_result
 
-def auto_checkout_forgotten_students():
-    """サーバー起動時に、前日以前の退室忘れを自動処理する"""
-    print("退室忘れの記録をチェックしています...")
-    conn = get_db_connection()
-    try:
-        start_of_today_jst = datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
-        start_of_today_utc = start_of_today_jst.astimezone(UTC)
-
-        forgotten_logs = conn.execute(
-            "SELECT id, system_id, entry_time FROM attendance_logs WHERE exit_time IS NULL AND entry_time < ?",
-            (start_of_today_utc.isoformat(),)
-        ).fetchall()
-
-        if not forgotten_logs:
-            print("退室忘れの記録はありませんでした。")
-            return
-
-        for log in forgotten_logs:
-            # 簡易的に、入室時刻の2時間後を退室時刻とする
-            entry_time_utc = datetime.datetime.fromisoformat(log['entry_time'])
-            estimated_exit_time_utc = entry_time_utc + datetime.timedelta(hours=2)
-            
-            conn.execute("UPDATE attendance_logs SET exit_time = ? WHERE id = ?", (estimated_exit_time_utc.isoformat(), log['id']))
-            conn.execute("UPDATE students SET is_present = 0, current_log_id = NULL WHERE system_id = ?", (log['system_id'],))
-            print(f"ID:{log['system_id']} の退室忘れを自動処理しました。")
-        
-        conn.commit()
-    except Exception as e:
-        print(f"退室忘れの自動処理中にエラーが発生しました: {e}")
-        conn.rollback()
-    finally:
-        conn.close()
-
-# --- 起動時処理 ---
-with app.app_context():
-    database.init_db()
-    auto_checkout_forgotten_students()
+# (以降のコードは、前回のバグ修正をすべて含んだ最新版です)
 
 # --- ルーティング ---
 @app.route('/')
 def index():
-    # (変更なし)
     return render_template('index.html', 
                            mode=request.args.get('mode', 'students'), 
                            app_name=os.getenv('APP_NAME', '入退室管理システム'),
@@ -117,7 +86,6 @@ def index():
 
 @app.route('/api/initial_data')
 def get_initial_data():
-    # (変更なし)
     now_jst = datetime.datetime.now(JST)
     start_of_day_jst = now_jst.replace(hour=0, minute=0, second=0, microsecond=0)
     start_of_day_utc = start_of_day_jst.astimezone(UTC)
@@ -198,19 +166,20 @@ def qr_process():
         # 退室忘れのチェック
         if student['is_present']:
             log_entry = conn.execute('SELECT entry_time FROM attendance_logs WHERE id = ?', (student['current_log_id'],)).fetchone()
-            entry_time_jst = parse_db_time_to_jst(log_entry['entry_time'])
-            if entry_time_jst.date() < datetime.datetime.now(JST).date():
-                # 退室忘れと判断 -> 自動退室処理
-                forgotten_exit_time = entry_time_jst.replace(hour=22, minute=0, second=0).astimezone(UTC)
-                conn.execute('UPDATE attendance_logs SET exit_time = ? WHERE id = ?', (forgotten_exit_time.isoformat(), student['current_log_id']))
-                conn.execute('UPDATE students SET is_present = 0, current_log_id = NULL WHERE system_id = ?', (system_id,))
-                print(f"ID:{system_id} の退室忘れを検出し、自動退室させました。")
-                student = {'is_present': 0, 'name': student['name'], 'current_log_id': None} # 状態を更新
+            if log_entry:
+                entry_time_jst = parse_db_time_to_jst(log_entry['entry_time'])
+                if entry_time_jst.date() < datetime.datetime.now(JST).date():
+                    forgotten_exit_time = entry_time_jst.replace(hour=22, minute=0, second=0).astimezone(UTC)
+                    conn.execute('UPDATE attendance_logs SET exit_time = ? WHERE id = ?', (forgotten_exit_time.isoformat(), student['current_log_id']))
+                    conn.execute('UPDATE students SET is_present = 0, current_log_id = NULL WHERE system_id = ?', (system_id,))
+                    print(f"ID:{system_id} の退室忘れを検出し、自動退室させました。")
+                    student = {'is_present': 0, 'name': student['name'], 'current_log_id': None}
         
         message, ach_result = "", None
         if student['is_present']:
             exit_time_utc = datetime.datetime.now(UTC)
             log_id_to_update = student['current_log_id']
+            if not log_id_to_update: return jsonify({'status': 'error', 'message': '有効な退室記録が見つかりません。'}), 409
             conn.execute('UPDATE attendance_logs SET exit_time = ? WHERE id = ?', (exit_time_utc.isoformat(), log_id_to_update))
             conn.execute('UPDATE students SET is_present = 0, current_log_id = NULL WHERE system_id = ?', (system_id,))
             message = f'{student["name"]}さんが退室しました。'
@@ -235,19 +204,15 @@ def exit_all():
     try:
         present_students = conn.execute('SELECT current_log_id, system_id FROM students WHERE is_present = 1').fetchall()
         if not present_students: return jsonify({'status': 'success', 'message': '退室させる生徒がいません。'})
-        
         exit_time_utc = datetime.datetime.now(UTC)
         log_ids = [s['current_log_id'] for s in present_students if s['current_log_id']]
         if not log_ids: return jsonify({'status': 'info', 'message': '退室記録対象の生徒がいません。'})
-        
         system_ids = [s['system_id'] for s in present_students]
         conn.execute(f'UPDATE attendance_logs SET exit_time = ? WHERE id IN ({",".join("?"*len(log_ids))})', [exit_time_utc.isoformat()] + log_ids)
         conn.execute(f'UPDATE students SET is_present = 0, current_log_id = NULL WHERE system_id IN ({",".join("?"*len(system_ids))})', system_ids)
-        
-        # 各生徒にメールを送信
         for student_info in present_students:
-             _handle_notifications(conn, student_info['system_id'], 'check_out', student_info['current_log_id'])
-             
+             if student_info['current_log_id']:
+                _handle_notifications(conn, student_info['system_id'], 'check_out', student_info['current_log_id'])
         conn.commit()
         return jsonify({'status': 'success', 'message': f'{len(present_students)}名の生徒を全員退室させました。'})
     except Exception as e:
