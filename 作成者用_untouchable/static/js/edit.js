@@ -127,7 +127,7 @@ function renderTable(logs) {
             <td>${log.student_number || ''}</td>
             <td>${log.name || ''}</td>
             <td>${entryDate ? entryDate.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : ''}</td>
-            <td>${exitDate ? exitDate.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : '（退室未完了）'}</td>
+            <td>${exitDate ? exitDate.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : '（未退室）'}</td>
             <td>${durationText}</td>
             <td class="action-buttons">
                 <button class="edit-btn" data-log-id="${log.id}">編集</button>

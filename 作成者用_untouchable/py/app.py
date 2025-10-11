@@ -198,14 +198,14 @@ def qr_process():
             if not log_id_to_update: return jsonify({'status': 'error', 'message': '有効な退室記録が見つかりません。'}), 409
             conn.execute('UPDATE attendance_logs SET exit_time = ? WHERE id = ?', (exit_time_utc.isoformat(), log_id_to_update))
             conn.execute('UPDATE students SET is_present = 0, current_log_id = NULL WHERE system_id = ?', (system_id,))
-            message = f'{student["name"]}さんが退室しました。'
+            message = f'{student["name"]}さんが自習室から退室しました。'
             ach_result = _handle_notifications(conn, system_id, 'check_out', log_id_to_update)
         else:
             entry_time_utc = datetime.datetime.now(UTC)
             cursor = conn.execute('INSERT INTO attendance_logs (system_id, entry_time) VALUES (?, ?)', (system_id, entry_time_utc.isoformat()))
             new_log_id = cursor.lastrowid
             conn.execute('UPDATE students SET is_present = 1, current_log_id = ? WHERE system_id = ?', (new_log_id, system_id))
-            message = f'{student["name"]}さんが入室しました。'
+            message = f'{student["name"]}さんが自習室に入室しました。'
             ach_result = _handle_notifications(conn, system_id, 'check_in', new_log_id)
         
         conn.commit()
