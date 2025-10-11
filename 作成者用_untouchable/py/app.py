@@ -395,4 +395,16 @@ def delete_log(log_id):
 
 # --- サーバーの起動 ---
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    # 証明書ファイルのパスを定義
+    cert_path = os.path.join(os.path.dirname(__file__), '..', 'certs', 'cert.pem')
+    key_path = os.path.join(os.path.dirname(__file__), '..', 'certs', 'key.pem')
+
+    # 証明書と秘密鍵の両方が存在するかチェック
+    if os.path.exists(cert_path) and os.path.exists(key_path):
+        print("SSL証明書を検出しました。HTTPSでサーバーを起動します。")
+        # HTTPSで起動
+        app.run(host='0.0.0.0', port=8080, debug=False, ssl_context=(cert_path, key_path))
+    else:
+        print("SSL証明書が見つかりません。HTTPでサーバーを起動します。")
+        # 通常のHTTPで起動
+        app.run(host='0.0.0.0', port=8080, debug=True)

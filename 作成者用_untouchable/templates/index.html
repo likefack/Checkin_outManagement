@@ -106,5 +106,40 @@
         const MAX_SEAT_NUMBER = {{ max_seat_number | tojson }};
     </script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+ <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register("{{ url_for('static', filename='service-worker.js') }}")
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(err => {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+
+                const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+                const urlParams = new URLSearchParams(window.location.search);
+                const mode = urlParams.get('mode');
+
+                // --- 新しい判定ロジック ---
+                // 1. 従来のiPhone/iPod判定
+                const isIOS = /iPhone|iPod/.test(userAgent) && !window.MSStream;
+                // 2. Macを名乗るがタッチ操作可能なデバイス（= iPad）の判定
+                const isIPad = (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 0) || /iPad/.test(userAgent);
+
+                // iPad, iPhone, iPodのいずれかで、かつURLにmodeが指定されていない場合
+                if ((isIOS || isIPad) && !mode) {
+                    console.log("iOS/iPadOS device detected. Staying in students mode.");
+                    // 何もしない（デフォルトのstudentsモード）
+                } 
+                // それ以外のデバイスで、現在adminモードでない場合
+                else if (mode !== 'admin') {
+                    console.log("PC device detected. Redirecting to admin mode.");
+                    // adminモードにリダイレクト
+                    window.location.href = '/?mode=admin';
+                }
+            });
+        }
+    </script>
 </body>
 </html>
