@@ -81,7 +81,7 @@ def import_students_from_excel(conn):
 def import_phrases_from_excel(conn):
     if not os.path.exists(PHRASES_EXCEL_PATH): return
     df = pd.read_excel(PHRASES_EXCEL_PATH, engine='openpyxl')
-    df['lifespan'] = df.apply(lambda row: f"({row['生年']} - {row['没年']})" if pd.notna(row['生年']) else None, axis=1)
+    df['lifespan'] = df.apply(lambda row: f"({row['生年']} ～ {row['没年']})" if pd.notna(row['生年']) else None, axis=1)
     df.rename(columns={'属性': 'category', 'phrase': 'text', '発信者': 'author'}, inplace=True)
     df_phrases = df[['category', 'text', 'author', 'lifespan']]
     df_phrases.sample(frac=1).reset_index(drop=True).to_sql('phrases', conn, if_exists='append', index=False)
