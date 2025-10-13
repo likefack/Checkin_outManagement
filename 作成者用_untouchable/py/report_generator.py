@@ -100,16 +100,43 @@ def create_report(db_path, start_date_str, end_date_str):
             df_raw[final_columns].to_excel(writer, sheet_name='滞在記録(元データ)', index=False)
             
             # --- シート3: 日別サマリー ---
+            # 1. これまで通り、日付ごとの集計と、学年ごとのクロス集計をそれぞれ作成
             daily_agg = df.groupby('date').agg(
-                day_of_week_jp=('day_of_week_jp', 'first'),
                 total_checkins=('system_id', 'count'),
                 unique_users=('system_id', 'nunique'),
                 avg_stay_minutes=('stay_minutes', 'mean')
             ).round(1)
-            # ★★★ 修正: crosstabでも'date'列を参照するように統一 ★★★
-            daily_grade_pivot = pd.crosstab(df['date'], df['grade_jp'], values=df['system_id'], aggfunc='nunique').reindex(columns=all_grades_jp, fill_value=0)
-            df_daily = pd.concat([daily_agg['day_of_week_jp'], daily_agg[['total_checkins', 'unique_users']], daily_grade_pivot, daily_agg['avg_stay_minutes']], axis=1)
-            df_daily.rename(columns={'day_of_week_jp':'曜日', 'total_checkins':'総入室回数', 'unique_users':'ユニーク入室者数', 'avg_stay_minutes':'平均滞在時間(分)'}, inplace=True)
+
+            daily_grade_pivot = pd.crosstab(df['date'], df['grade_jp'], values=df['system_id'], aggfunc='nunique')
+            
+            # 2. 2つの集計結果を一度結合し、列にすべての学年が含まれるように保証する
+            df_daily = pd.concat([daily_agg, daily_grade_pivot], axis=1)
+            # (all_grades_jpはシート1作成時に定義済み)
+            df_daily = df_daily.reindex(columns=daily_agg.columns.tolist() + all_grades_jp)
+
+            # 3. ★★★【最重要修正点】★★★
+            # レポート期間の全日付を持つインデックスを作成し、それを基準に表を再構成する
+            # これにより、入室記録がなかった日も必ず行として表示される
+            all_dates_index = pd.to_datetime(pd.date_range(start=start_date, end=end_date)).date
+            df_daily = df_daily.reindex(all_dates_index)
+
+            # 4. 記録がなくてNaN(空欄)になったセルを0で埋める
+            df_daily.fillna(0, inplace=True)
+            
+            # 5. 空だった行の曜日を、日付インデックスから再生成して埋める
+            df_daily['day_of_week_jp'] = pd.to_datetime(df_daily.index).to_series().dt.day_name().map(DOW_MAP)
+
+            # 6. カラムのデータ型（整数）と最終的な順序を整える
+            count_cols = ['total_checkins', 'unique_users'] + all_grades_jp
+            df_daily[count_cols] = df_daily[count_cols].astype(int)
+            final_columns_daily = ['day_of_week_jp'] + count_cols + ['avg_stay_minutes']
+            df_daily = df_daily[final_columns_daily]
+
+            # 7. カラム名を日本語にリネームしてExcelに出力
+            df_daily.rename(columns={
+                'day_of_week_jp':'曜日', 'total_checkins':'総入室回数', 
+                'unique_users':'ユニーク入室者数', 'avg_stay_minutes':'平均滞在時間(分)'
+            }, inplace=True)
             df_daily.index.name = '日付'
             df_daily.to_excel(writer, sheet_name='日別サマリー')
 
