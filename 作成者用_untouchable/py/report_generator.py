@@ -73,7 +73,7 @@ def create_report(db_path, start_date_str, end_date_str):
 
         with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
             
-            # --- シート1: 学年組別サマリー ---
+            # --- シート1: ユニーク学年組別サマリー ---
             all_grades_jp = sorted(students_master['grade'].map(GRADE_MAP).unique(), key=lambda x: list(GRADE_MAP.values()).index(x))
             all_classes = sorted(students_master['class'].unique())
             df_summary_class = pd.crosstab(df['grade_jp'], df['class'], values=df['system_id'], aggfunc='nunique').fillna(0).astype(int)
@@ -82,7 +82,7 @@ def create_report(db_path, start_date_str, end_date_str):
             df_summary_class.loc['合計'] = df_summary_class.sum()
             df_summary_class.index.name = "学年"
             df_summary_class.columns.name = "組"
-            df_summary_class.to_excel(writer, sheet_name='学年組別サマリー')
+            df_summary_class.to_excel(writer, sheet_name='ユニーク学年組別サマリー')
 
             # --- シート2: 滞在記録(元データ) ---
             df_raw = df[['ID', 'grade_jp', 'class', 'student_number', 'name', 'entry_time', 'exit_time', 
