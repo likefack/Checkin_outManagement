@@ -151,32 +151,56 @@ def create_report(db_path, start_date_str, end_date_str):
             total_open_days = df['date'].nunique()
             # 2. 「開室日数」を基に週数を計算する（7日未満は1週間とみなす）
             num_weeks = total_open_days / 7 if total_open_days >= 7 else 1
-            df_user_summary = df.groupby(['grade_jp', 'class', 'student_number', 'name']).agg(
+            df_daily_unique_users = df.drop_duplicates(subset=['date', 'system_id'])
+            df_user_summary = df.groupby(['grade_jp', 'class', 'student_number', 'name', 'system_id']).agg(
                 total_checkins=('system_id', 'count'),
-                total_stay_hours=('stay_hours', 'sum'),
+                unique_days_attended=('date', 'nunique'),
+                total_stay_minutes=('stay_minutes', 'sum'),
                 avg_stay_minutes=('stay_minutes', 'mean'),
                 most_used_dow=('day_of_week_jp', lambda x: x.mode()[0]),
                 first_use_date=('date', 'min'),
                 most_used_hour=('entry_hour_jp', lambda x: x.mode()[0])
             ).reset_index()
-            df_user_summary['weekly_avg_checkins'] = round(df_user_summary['total_checkins'] / num_weeks, 1)
+            # 曜日ごとの利用日数を集計
+            dow_counts = pd.crosstab(df_daily_unique_users['system_id'], df_daily_unique_users['day_of_week_jp'])
+            
+            # 月〜日のカラム順に並び替え、記録がない曜日も0で埋める
+            dow_order = ['月', '火', '水', '木', '金', '土', '日']
+            dow_counts = dow_counts.reindex(columns=dow_order, fill_value=0)
+
+            # 曜日ごとの集計結果をメインのサマリーに結合
+            df_user_summary = pd.merge(df_user_summary, dow_counts, on='system_id', how='left')
+            # 結合後に不要になったsystem_id列を削除
+            df_user_summary.drop(columns=['system_id'], inplace=True)
+            df_user_summary['weekly_avg_checkins'] = round(df_user_summary['unique_days_attended'] / num_weeks, 1)
             df_user_summary.rename(columns={
                 'grade_jp': '学年', 'class': '組', 'student_number': '番号', 'name': '氏名',
-                'total_checkins': '総利用回数', 'total_stay_hours': '総滞在時間(時間)',
+                'total_checkins': '総利用回数', 'unique_days_attended': '利用日数', # '利用日数' を追加
+                'total_stay_minutes': '総滞在時間(分)', # '総滞在時間(分)' に変更
                 'avg_stay_minutes': '平均滞在時間(分)', 'most_used_dow': '最多利用曜日',
                 'weekly_avg_checkins': '週平均利用回数', 'first_use_date': '初回利用日', 'most_used_hour': '最多入室時間帯'
             }, inplace=True)
-            df_user_summary = df_user_summary[['学年', '組', '番号', '氏名', '総利用回数', '週平均利用回数', '総滞在時間(時間)', '平均滞在時間(分)', '最多利用曜日', '最多入室時間帯', '初回利用日']]
+            
+            # 最終的に出力する列のリストを定義し直す
+            final_user_summary_columns = [
+                '学年', '組', '番号', '氏名', 
+                '総利用回数', '利用日数', '週平均利用回数', 
+                '総滞在時間(分)', '平均滞在時間(分)', 
+                '最多利用曜日', '月', '火', '水', '木', '金', '土', '日',
+                '最多入室時間帯', '初回利用日'
+            ]
+            df_user_summary = df_user_summary[final_user_summary_columns]
+            
             df_user_summary.to_excel(writer, sheet_name='利用者別サマリー', index=False)
             
-            # --- シート5: 時間帯別サマリー ---
+            # --- シート5: 総入室回数時間帯別サマリー ---
             hourly_pivot = pd.crosstab(df['entry_hour_jp'], df['grade_jp']).reindex(columns=all_grades_jp, fill_value=0)
             all_hours_jp = [f"{h}時台" for h in range(24)]
             hourly_pivot = hourly_pivot.reindex(index=all_hours_jp, fill_value=0)
             hourly_pivot['合計'] = hourly_pivot.sum(axis=1)
             hourly_pivot.loc['合計'] = hourly_pivot.sum()
             hourly_pivot.index.name = '時間帯'
-            hourly_pivot.to_excel(writer, sheet_name='時間帯別サマリー')
+            hourly_pivot.to_excel(writer, sheet_name='総入室回数時間帯別サマリー')
 
         return file_path, f"レポートが正常に作成されました: {os.path.basename(file_path)}"
         
