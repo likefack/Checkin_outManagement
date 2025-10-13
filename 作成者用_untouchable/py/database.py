@@ -81,7 +81,26 @@ def import_students_from_excel(conn):
 def import_phrases_from_excel(conn):
     if not os.path.exists(PHRASES_EXCEL_PATH): return
     df = pd.read_excel(PHRASES_EXCEL_PATH, engine='openpyxl')
-    df['lifespan'] = df.apply(lambda row: f"({row['生年']} ～ {row['没年']})" if pd.notna(row['生年']) else None, axis=1)
+
+    # '生年'と'没年'を数値に変換し、変換できない値（'没年不明'など）はNaNにする
+    df['birth_year_num'] = pd.to_numeric(df['生年'], errors='coerce')
+    df['death_year_num'] = pd.to_numeric(df['没年'], errors='coerce')
+
+    def format_lifespan(row):
+        # 生年が有効な数値かチェック
+        if pd.notna(row['birth_year_num']):
+            birth_year = int(row['birth_year_num'])
+            # 没年が有効な数値かチェック
+            if pd.notna(row['death_year_num']):
+                death_year = int(row['death_year_num'])
+                return f"({birth_year} ～ {death_year})"
+            else:
+                # 没年が空欄や文字列の場合は、空にする
+                return f"({birth_year} ～ )"
+        return None # 生年が無効なら何も返さない
+
+    df['lifespan'] = df.apply(format_lifespan, axis=1)
+
     df.rename(columns={'属性': 'category', 'phrase': 'text', '発信者': 'author'}, inplace=True)
     df_phrases = df[['category', 'text', 'author', 'lifespan']]
     df_phrases.sample(frac=1).reset_index(drop=True).to_sql('phrases', conn, if_exists='append', index=False)
@@ -89,7 +108,6 @@ def import_phrases_from_excel(conn):
 
 
 def init_db():
-    # ▼▼▼ 変更ここから ▼▼▼
     # 常に最初にDBファイルに接続する
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -116,4 +134,4 @@ def init_db():
             
     # 正常に処理が終わったら接続を閉じる
     conn.close()
-    # ▲▲▲ 変更ここまで ▲▲▲
+
