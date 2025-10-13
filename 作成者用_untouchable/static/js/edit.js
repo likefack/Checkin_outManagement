@@ -17,7 +17,8 @@ let currentPage = 1;
 const logsPerPage = 100;
 let currentSort = { column: 'id', direction: 'desc' };
 let totalLogsCount = 0;
-
+let entryTimePicker = null;
+let exitTimePicker = null;
 // --- DOM要素の取得 ---
 const dom = {
     filterPeriod: document.getElementById('filter-period'),
@@ -52,8 +53,20 @@ const dom = {
  */
 async function initializeEditPage() {
     setupEventListeners();
-    // モーダルではflatpickrを使わないので、フィルター用のみ初期化
+   // フィルター用は変更なし
     flatpickr(dom.filterPeriod, { mode: "range", dateFormat: "Y-m-d", locale: "ja" });
+
+    // モーダル内の日時入力欄にflatpickrを適用
+    const flatpickrOptions = {
+        enableTime: true,           // 時間の選択を有効化
+        dateFormat: "Y/m/d H:i",    // 表示形式を「年/月/日 時:分」に設定 (曜日なし)
+        locale: "ja",               // 日本語化
+        time_24hr: true,            // 24時間表示
+        position: 'above' // カレンダーを常に入力欄の上に表示する
+    };
+    entryTimePicker = flatpickr(dom.editEntryTime, flatpickrOptions);
+    exitTimePicker = flatpickr(dom.editExitTime, flatpickrOptions);
+    
     await fetchLogs();
 }
 
@@ -203,6 +216,10 @@ async function handleTableActions(event) {
         }
     }
 }
+//modal関連のヘルパー関数群
+// edit.js
+
+// edit.js
 
 /**
  * モーダルの表示
@@ -211,6 +228,7 @@ async function openModal(log = null) {
     dom.editForm.reset();
     populateModalGradeSelect(); 
     
+    // ▼▼▼ ここから修正 ▼▼▼
     if (log) { // 編集の場合
         dom.modalTitle.textContent = "記録の編集";
         dom.editLogId.value = log.id;
@@ -220,21 +238,35 @@ async function openModal(log = null) {
         await onModalClassChange();
         dom.modalNumberSelect.value = log.student_number;
         await onModalNumberChange();
-        dom.editEntryTime.value = formatDateForInput(log.entry_time);
-        dom.editExitTime.value = formatDateForInput(log.exit_time);
-    } else { // 新規追加の場合
+
+        // 記録済みの入室時刻をセット（なければ現在時刻）
+        const entryDate = log.entry_time ? new Date(log.entry_time) : new Date();
+        entryTimePicker.setDate(entryDate, true);
+        
+        // 記録済みの退室時刻があればセットし、なければ現在時刻をセット
+        const exitDate = log.exit_time ? new Date(log.exit_time) : new Date();
+        exitTimePicker.setDate(exitDate, true);
+
+     } else { // 新規追加の場合
         dom.modalTitle.textContent = "新規記録の追加";
         dom.editLogId.value = '';
         dom.modalGradeSelect.value = '';
         onModalGradeChange();
-        dom.editEntryTime.value = '';
-        dom.editExitTime.value = '';
+
+        // 新規追加時は日付をクリアする（空欄にする）
+        entryTimePicker.clear();
+        exitTimePicker.clear();
     }
+    // ▲▲▲ ここまで修正 ▲▲▲
+    
     dom.modal.style.display = 'flex';
 }
 
 function closeModal() {
     dom.modal.style.display = 'none';
+     // モーダルを閉じる際にも日付をクリアする
+    entryTimePicker.clear();
+    exitTimePicker.clear();
 }
 
 /**
@@ -253,17 +285,20 @@ async function handleFormSubmit(event) {
         alert("生徒が正しく選択されていません。");
         return;
     }
-    
-    // ★★★ 修正: datetime-localの値をサーバーが期待する形式に変換 ★★★
-    const entryTimeVal = dom.editEntryTime.value ? dom.editEntryTime.value.replace('T', ' ') + ':00' : null;
-    const exitTimeVal = dom.editExitTime.value ? dom.editExitTime.value.replace('T', ' ') + ':00' : null;
+     // flatpickrから選択された日付オブジェクトを取得
+    const entryTime = entryTimePicker.selectedDates[0];
+    const exitTime = exitTimePicker.selectedDates[0];
+
+    // 新しいヘルパー関数を使って、サーバーが要求する 'YYYY-MM-DD HH:MM:SS' 形式に変換
+    const entryTimeVal = formatDateForServer(entryTime);
+    const exitTimeVal = formatDateForServer(exitTime);
 
     const logData = {
         system_id: student.system_id,
         entry_time: entryTimeVal,
         exit_time: exitTimeVal
     };
-
+    
     const url = logId ? `/api/logs/${logId}` : '/api/logs';
     const method = logId ? 'PUT' : 'POST';
 
@@ -282,24 +317,26 @@ async function handleFormSubmit(event) {
     } catch (error) {
         alert("保存中にエラーが発生しました。");
     }
+    // ▲▲▲ 変更ここまで ▲▲▲
 }
 
+// 古いformatDateForInput関数は不要になったので、全体を新しいヘルパー関数に差し替える
 /**
- * ISO文字列をdatetime-localの入力形式(YYYY-MM-DDTHH:MM)に変換するヘルパー関数
+ * JavaScriptのDateオブジェクトを 'YYYY-MM-DD HH:MM:SS' 形式の文字列に変換する
+ * @param {Date} date - 変換するDateオブジェクト
+ * @returns {string|null} - フォーマットされた文字列、またはdateがなければnull
  */
-function formatDateForInput(isoString) {
-    if (!isoString) return '';
-    try {
-        const date = new Date(isoString);
-        const offset = date.getTimezoneOffset() * 60000;
-        const localDate = new Date(date.getTime() - offset);
-        return localDate.toISOString().slice(0, 16);
-    } catch (e) {
-        console.error("Date formatting error:", e);
-        return '';
-    }
+function formatDateForServer(date) {
+    if (!date) return null;
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    const h = String(date.getHours()).padStart(2, '0');
+    const i = String(date.getMinutes()).padStart(2, '0');
+    const s = String(date.getSeconds()).padStart(2, '0');
+    return `${y}-${m}-${d} ${h}:${i}:${s}`;
 }
-
+// ▲▲▲ 変更ここまで ▲▲▲
 // --- 生徒選択・ドロップダウン関連のヘルパー関数群 ---
 function buildNestedStudentsData() {
     studentsDataNested = {};
