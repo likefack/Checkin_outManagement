@@ -147,7 +147,7 @@ thead th {
 .qr-input-hidden { position: absolute; left: -9999px; opacity: 0; }
 
 /* --- 通知 (トースト) --- */
-#toast-container { position: fixed; top: 20px; right: 20px; z-index: 2000; }
+#toast-container { position: fixed; top: 20px; right: 20px; z-index: 2000; pointer-events: none;}
 .toast { background-color: #333; color: white; padding: 15px; border-radius: 5px; margin-bottom: 10px; opacity: 0; transform: translateX(100%); transition: all 0.5s ease-in-out; }
 .toast.show { opacity: 1; transform: translateX(0); }
 .toast.gold { background-color: gold; color: black; border: 2px solid darkgoldenrod; }

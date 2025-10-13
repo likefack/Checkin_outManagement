@@ -73,7 +73,7 @@ def create_report(db_path, start_date_str, end_date_str):
 
         with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
             
-            # --- シート1: ユニーク学年組別サマリー ---
+            # --- シート1: 日別ユニーク学年組別サマリー ---
             # 存在するすべての学年・組のリストをマスターから取得
             all_grades_jp = sorted(students_master['grade'].map(GRADE_MAP).unique(), key=lambda x: list(GRADE_MAP.values()).index(x))
             all_classes = sorted(students_master['class'].unique())
@@ -92,7 +92,7 @@ def create_report(db_path, start_date_str, end_date_str):
             df_summary_class.columns.name = "組"
             
             # 4. シート名を分かりやすいように変更してExcelに出力
-            df_summary_class.to_excel(writer, sheet_name='ユニーク学年組別サマリー(延べ人数)')
+            df_summary_class.to_excel(writer, sheet_name='日別ユニーク学年組別サマリー')
             # --- シート2: 滞在記録(元データ) ---
             df_raw = df[['ID', 'grade_jp', 'class', 'student_number', 'name', 'entry_time', 'exit_time', 
                          'stay_minutes', 'day_of_week_jp', 'entry_hour_jp']].copy()
