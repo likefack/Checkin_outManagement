@@ -389,7 +389,15 @@ def add_log():
     entry_time_utc, exit_time_utc = convert_to_utc(entry_time), convert_to_utc(exit_time)
     conn = get_db_connection()
     try:
-        conn.execute('INSERT INTO attendance_logs (system_id, entry_time, exit_time) VALUES (?, ?, ?)', (system_id, entry_time_utc, exit_time_utc))
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO attendance_logs (system_id, entry_time, exit_time) VALUES (?, ?, ?)', (system_id, entry_time_utc, exit_time_utc))
+        new_log_id = cursor.lastrowid # 作成されたログのIDを取得
+
+        is_today = datetime.datetime.fromisoformat(entry_time_utc).astimezone(JST).date() == datetime.datetime.now(JST).date()
+        if exit_time_utc is None and is_today:
+            # 該当生徒のステータスを「在室中」に更新する
+            conn.execute('UPDATE students SET is_present = 1, current_log_id = ? WHERE system_id = ?', (new_log_id, system_id))
+        
         conn.commit()
         return jsonify({'status': 'success', 'message': '記録が正常に追加されました。'})
     except Exception as e:
@@ -405,22 +413,24 @@ def update_log(log_id):
     entry_time_utc, exit_time_utc = convert_to_utc(entry_time), convert_to_utc(exit_time)
     conn = get_db_connection()
     try:
-        log_before_update = conn.execute('SELECT system_id, exit_time FROM attendance_logs WHERE id = ?', (log_id,)).fetchone()
-        
-        # ログを更新
+        # --- 1. 既存のステータスを安全にリセット ---
+        # このログIDが、いずれかの生徒の「現在の入室記録」として設定されている場合、
+        # その生徒のステータスを一旦「退室済み」にリセットする。
+        # これにより、ログの担当生徒が変更された場合でも、元の生徒のステータスが「入室中」のまま残るのを防ぐ。
+        conn.execute('UPDATE students SET is_present = 0, current_log_id = NULL WHERE current_log_id = ?', (log_id,))
+
+        # --- 2. ログ記録を更新 ---
         conn.execute('UPDATE attendance_logs SET system_id = ?, entry_time = ?, exit_time = ? WHERE id = ?', (system_id, entry_time_utc, exit_time_utc, log_id))
 
-        # 退室時刻が「無かった」状態から「有る」状態に変わったかを確認
-        was_present = log_before_update and log_before_update['exit_time'] is None
-        is_now_exited = exit_time_utc is not None
-
-        if was_present and is_now_exited:
-            # 変更されたログの生徒 (`system_id`) の現在のステータスを確認
-            student_status = conn.execute('SELECT current_log_id FROM students WHERE system_id = ?', (system_id,)).fetchone()
-            
-            # もし、更新されたログIDがその生徒の「現在の入室ログID」と一致する場合のみ、ステータスをリセット
-            if student_status and student_status['current_log_id'] == log_id:
-                conn.execute('UPDATE students SET is_present = 0, current_log_id = NULL WHERE system_id = ?', (system_id,))
+        # --- 3. 新しいステータスを条件付きで設定 ---
+        # 更新後の入室日が今日であるかを確認
+        is_today = datetime.datetime.fromisoformat(entry_time_utc).astimezone(JST).date() == datetime.datetime.now(JST).date()
+        
+        # もし更新後の記録が「未退室」かつ「今日の日付」ならば、
+        if exit_time_utc is None and is_today:
+            # 新しい担当生徒のステータスを「在室中」に更新する
+            conn.execute('UPDATE students SET is_present = 1, current_log_id = ? WHERE system_id = ?', (log_id, system_id))
+        
         conn.commit()
         return jsonify({'status': 'success', 'message': f'ID: {log_id} の記録が正常に更新されました。'})
     except Exception as e:
