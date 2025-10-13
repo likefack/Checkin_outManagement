@@ -74,16 +74,25 @@ def create_report(db_path, start_date_str, end_date_str):
         with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
             
             # --- シート1: ユニーク学年組別サマリー ---
+            # 存在するすべての学年・組のリストをマスターから取得
             all_grades_jp = sorted(students_master['grade'].map(GRADE_MAP).unique(), key=lambda x: list(GRADE_MAP.values()).index(x))
             all_classes = sorted(students_master['class'].unique())
-            df_summary_class = pd.crosstab(df['grade_jp'], df['class'], values=df['system_id'], aggfunc='nunique').fillna(0).astype(int)
+
+            # 1. 日付と生徒IDで重複を削除し、「日ごとのユニーク利用者」データを作成
+            df_daily_unique_users = df.drop_duplicates(subset=['date', 'system_id'])
+
+            # 2. 上記の「日ごとユニーク」データを使ってクロス集計（=延べ人数をカウント）
+            df_summary_class = pd.crosstab(df_daily_unique_users['grade_jp'], df_daily_unique_users['class'])
+            
+            # 3. 欠損している学年・組を0埋めして合計を計算（ここは変更なし）
             df_summary_class = df_summary_class.reindex(index=all_grades_jp, columns=all_classes, fill_value=0)
             df_summary_class['合計'] = df_summary_class.sum(axis=1)
             df_summary_class.loc['合計'] = df_summary_class.sum()
             df_summary_class.index.name = "学年"
             df_summary_class.columns.name = "組"
-            df_summary_class.to_excel(writer, sheet_name='ユニーク学年組別サマリー')
-
+            
+            # 4. シート名を分かりやすいように変更してExcelに出力
+            df_summary_class.to_excel(writer, sheet_name='ユニーク学年組別サマリー(延べ人数)')
             # --- シート2: 滞在記録(元データ) ---
             df_raw = df[['ID', 'grade_jp', 'class', 'student_number', 'name', 'entry_time', 'exit_time', 
                          'stay_minutes', 'day_of_week_jp', 'entry_hour_jp']].copy()
@@ -114,9 +123,6 @@ def create_report(db_path, start_date_str, end_date_str):
             # (all_grades_jpはシート1作成時に定義済み)
             df_daily = df_daily.reindex(columns=daily_agg.columns.tolist() + all_grades_jp)
 
-            # 3. ★★★【最重要修正点】★★★
-            # レポート期間の全日付を持つインデックスを作成し、それを基準に表を再構成する
-            # これにより、入室記録がなかった日も必ず行として表示される
             all_dates_index = pd.to_datetime(pd.date_range(start=start_date, end=end_date)).date
             df_daily = df_daily.reindex(all_dates_index)
 
