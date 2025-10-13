@@ -373,7 +373,22 @@ def update_log(log_id):
     entry_time_utc, exit_time_utc = convert_to_utc(entry_time), convert_to_utc(exit_time)
     conn = get_db_connection()
     try:
+        log_before_update = conn.execute('SELECT system_id, exit_time FROM attendance_logs WHERE id = ?', (log_id,)).fetchone()
+        
+        # ログを更新
         conn.execute('UPDATE attendance_logs SET system_id = ?, entry_time = ?, exit_time = ? WHERE id = ?', (system_id, entry_time_utc, exit_time_utc, log_id))
+
+        # 退室時刻が「無かった」状態から「有る」状態に変わったかを確認
+        was_present = log_before_update and log_before_update['exit_time'] is None
+        is_now_exited = exit_time_utc is not None
+
+        if was_present and is_now_exited:
+            # 変更されたログの生徒 (`system_id`) の現在のステータスを確認
+            student_status = conn.execute('SELECT current_log_id FROM students WHERE system_id = ?', (system_id,)).fetchone()
+            
+            # もし、更新されたログIDがその生徒の「現在の入室ログID」と一致する場合のみ、ステータスをリセット
+            if student_status and student_status['current_log_id'] == log_id:
+                conn.execute('UPDATE students SET is_present = 0, current_log_id = NULL WHERE system_id = ?', (system_id,))
         conn.commit()
         return jsonify({'status': 'success', 'message': f'ID: {log_id} の記録が正常に更新されました。'})
     except Exception as e:
@@ -385,6 +400,7 @@ def update_log(log_id):
 def delete_log(log_id):
     conn = get_db_connection()
     try:
+        conn.execute('UPDATE students SET is_present = 0, current_log_id = NULL WHERE current_log_id = ?', (log_id,))
         conn.execute('DELETE FROM attendance_logs WHERE id = ?', (log_id,))
         conn.commit()
         return jsonify({'status': 'success', 'message': f'ID: {log_id} の記録が正常に削除されました。'})
@@ -403,7 +419,7 @@ if __name__ == '__main__':
     if os.path.exists(cert_path) and os.path.exists(key_path):
         print("SSL証明書を検出しました。HTTPSでサーバーを起動します。")
         # HTTPSで起動
-        app.run(host='0.0.0.0', port=8080, debug=False, ssl_context=(cert_path, key_path))
+        app.run(host='0.0.0.0', port=8080, debug=True, ssl_context=(cert_path, key_path))
     else:
         print("SSL証明書が見つかりません。HTTPでサーバーを起動します。")
         # 通常のHTTPで起動
