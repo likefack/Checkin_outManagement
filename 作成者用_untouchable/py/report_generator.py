@@ -147,8 +147,10 @@ def create_report(db_path, start_date_str, end_date_str):
             df_daily.to_excel(writer, sheet_name='日別サマリー')
 
             # --- シート4: 利用者別サマリー ---
-            total_days = (end_date - start_date).days + 1
-            num_weeks = total_days / 7 if total_days >= 7 else 1
+            # 1. ログデータからユニークな日付の数を数え、「開室日数」を算出する
+            total_open_days = df['date'].nunique()
+            # 2. 「開室日数」を基に週数を計算する（7日未満は1週間とみなす）
+            num_weeks = total_open_days / 7 if total_open_days >= 7 else 1
             df_user_summary = df.groupby(['grade_jp', 'class', 'student_number', 'name']).agg(
                 total_checkins=('system_id', 'count'),
                 total_stay_hours=('stay_hours', 'sum'),
