@@ -13,6 +13,7 @@ const exitTimers = {}; // { log_id: timerId }
 // --- DOM要素の取得 ---
 const dom = {
     currentTime: document.getElementById('current-time'),
+    appNameHeader: document.querySelector('.header-main h1'),
     gradeSelect: document.getElementById('grade-select'),
     classSelect: document.getElementById('class-select'),
     numberSelect: document.getElementById('number-select'),
@@ -97,6 +98,9 @@ async function fetchInitialData() {
  * @description ページ内の要素にイベントリスナーを設定する
  */
 function setupEventListeners() {
+    dom.appNameHeader.addEventListener('click', () => {
+        location.reload();
+    });
     dom.gradeSelect.addEventListener('change', onGradeChange);
     dom.classSelect.addEventListener('change', onClassChange);
     dom.numberSelect.addEventListener('change', onNumberChange);

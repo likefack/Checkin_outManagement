@@ -3,6 +3,14 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // --- グローバル変数・状態管理 ---
+const GRADE_MAP = {
+    1: '中1',
+    2: '中2',
+    3: '中3',
+    4: '高1',
+    5: '高2',
+    6: '高3'
+};
 let allStudents = [];
 let studentsDataNested = {};
 let currentPage = 1;
@@ -122,7 +130,7 @@ function renderTable(logs) {
         row.innerHTML = `
             <td>${log.id}</td>
             <td>${entryDate ? entryDate.toLocaleDateString('ja-JP') : ''}</td>
-            <td>${log.grade || ''}</td>
+            <td>${GRADE_MAP[log.grade] || log.grade || ''}</td>
             <td>${log.class || ''}</td>
             <td>${log.student_number || ''}</td>
             <td>${log.name || ''}</td>
@@ -304,7 +312,7 @@ function buildNestedStudentsData() {
 function populateModalGradeSelect() {
     dom.modalGradeSelect.innerHTML = '<option value="">学年</option>';
     const grades = Object.keys(studentsDataNested).sort((a,b)=>a-b);
-    grades.forEach(g => dom.modalGradeSelect.add(new Option(g, g)));
+    grades.forEach(g => dom.modalGradeSelect.add(new Option(GRADE_MAP[g] || g, g)));
 }
 async function onModalGradeChange() {
     const grade = dom.modalGradeSelect.value;
@@ -347,7 +355,7 @@ function populateFilterSelects(students) {
     const grades = [...new Set(students.map(s => s.grade))].sort((a,b)=>a-b);
     const classes = [...new Set(students.map(s => s.class))].sort((a,b)=>a-b);
     const numbers = [...new Set(students.map(s => s.student_number))].sort((a,b)=>a-b);
-    grades.forEach(g => dom.filterGrade.add(new Option(g, g)));
+    grades.forEach(g => dom.filterGrade.add(new Option(GRADE_MAP[g] || g, g)));
     classes.forEach(c => dom.filterClass.add(new Option(c, c)));
     numbers.forEach(n => dom.filterNumber.add(new Option(n, n)));
 }
