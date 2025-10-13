@@ -123,14 +123,18 @@ function setupEventListeners() {
  */
 async function processApiResponse(response) {
     const result = await response.json();
-    showToast(result.message); // まず基本メッセージを表示
+
+    // ▼▼▼ 変更点: APIレスポンスに含まれる`rank`情報を`showToast`関数に渡す ▼▼▼
+    // これにより、入退室の基本メッセージにも常に称号の色が適用される
+    showToast(result.message, result.rank);
     
     if (response.ok) {
-        // アチーブメントがあれば、少し遅れて表示
+        // アチーブメントメッセージの処理は変更なし (こちらも正しく色がつきます)
         if (result.achievement && result.achievement.student_message) {
             setTimeout(() => {
-                showToast(result.achievement.student_message, result.achievement.rank);
-            }, 750); // 0.75秒遅延
+                // 補足: achievementの中のrankではなく、result直下の最新のrankを渡すように統一します
+                showToast(result.achievement.student_message, result.rank);
+            }, 750);
         }
         await fetchInitialData();
         resetAllSelectors();

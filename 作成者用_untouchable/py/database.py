@@ -89,21 +89,31 @@ def import_phrases_from_excel(conn):
 
 
 def init_db():
-    # ★★★ 修正: 二重実行防止のチェックを削除 ★★★
-    # init_db()はapp.pyの起動時に一度だけ呼ばれるので、このチェックは不要かつ有害だった
-    db_abs_path = os.path.abspath(DB_PATH)
-    if not os.path.exists(db_abs_path):
-        print("データベースファイルが見つからないため、初期化を開始します...")
+    # ▼▼▼ 変更ここから ▼▼▼
+    # 常に最初にDBファイルに接続する
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # 'students'テーブルが存在するかどうかを、データベース自身に問い合わせて確認
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='students'")
+    table_exists = cursor.fetchone()
+    
+    # もしテーブルが存在しなければ、初期化処理（テーブル作成とデータインポート）を実行
+    if not table_exists:
+        print("studentsテーブルが見つからないため、初期化を開始します...")
         try:
-            conn = sqlite3.connect(db_abs_path)
             create_tables(conn)
             import_students_from_excel(conn)
             import_phrases_from_excel(conn)
-            conn.close()
             print("データベースの初期化が完了しました。")
         except Exception as e:
             print(f"!!! データベース初期化中に致命的なエラーが発生しました: {e} !!!")
-            if 'conn' in locals() and conn: conn.close()
-            if os.path.exists(db_abs_path): os.remove(db_abs_path)
+            # エラー発生時は接続を閉じ、中途半端なDBファイルを削除する
+            conn.close()
+            if os.path.exists(DB_PATH):
+                os.remove(DB_PATH)
             raise e
-
+            
+    # 正常に処理が終わったら接続を閉じる
+    conn.close()
+    # ▲▲▲ 変更ここまで ▲▲▲

@@ -135,7 +135,7 @@ def check_in():
     try:
         _reset_forgotten_checkin_status(conn, system_id)
         
-        student = conn.execute('SELECT is_present, name FROM students WHERE system_id = ?', (system_id,)).fetchone()
+        student = conn.execute('SELECT is_present, name, title FROM students WHERE system_id = ?', (system_id,)).fetchone()
         if student and student['is_present']:
             return jsonify({'status': 'error', 'message': f'{student["name"]}さんは既に入室済みです。'}), 409
         
@@ -143,9 +143,22 @@ def check_in():
         cursor = conn.execute('INSERT INTO attendance_logs (system_id, seat_number, entry_time) VALUES (?, ?, ?)', (system_id, seat_number, entry_time_utc.isoformat()))
         new_log_id = cursor.lastrowid
         conn.execute('UPDATE students SET is_present = 1, current_log_id = ? WHERE system_id = ?', (new_log_id, system_id))
+        
+        # 実績判定処理を呼び出す
         ach_result = _handle_notifications(conn, system_id, 'check_in', new_log_id)
+        
+        # ▼▼▼ 変更ここから ▼▼▼
+        # 最終的に通知に使うランクを決定する。
+        # もし実績（ach_result）の中に新しいランク情報があればそれを優先し、
+        # なければ最初にDBから読み込んだランク情報を使う。
+        final_rank = ach_result.get('rank') if ach_result and ach_result.get('rank') else student['title']
+        
         conn.commit()
-        return jsonify({'status': 'success', 'message': f'{student["name"]}さんが入室しました。', 'achievement': ach_result})
+
+        # `rank`キーに、上で決定した最新のランク情報(final_rank)を渡す
+        return jsonify({'status': 'success', 'message': f'{student["name"]}さんが入室しました。', 'rank': final_rank, 'achievement': ach_result})
+        # ▲▲▲ 変更ここまで ▲▲▲
+
     except Exception as e:
         conn.rollback(); return jsonify({'status': 'error', 'message': f'データベースエラー: {e}'}), 500
     finally:
@@ -162,7 +175,8 @@ def check_out():
             id_row = conn.execute('SELECT system_id FROM attendance_logs WHERE id = ?', (log_id,)).fetchone()
             if not id_row: return jsonify({'status': 'error', 'message': '該当の記録が見つかりません。'}), 404
             system_id = id_row['system_id']
-        student = conn.execute('SELECT name FROM students WHERE system_id = ?', (system_id,)).fetchone()
+
+        student = conn.execute('SELECT name, title FROM students WHERE system_id = ?', (system_id,)).fetchone()
         log_id_to_update = log_id if log_id else conn.execute('SELECT current_log_id FROM students WHERE system_id = ?', (system_id,)).fetchone()['current_log_id']
         if not log_id_to_update: return jsonify({'status': 'error', 'message': '有効な退室記録が見つかりません。'}), 409
         log_to_exit = conn.execute('SELECT exit_time FROM attendance_logs WHERE id = ?', (log_id_to_update,)).fetchone()
@@ -171,9 +185,20 @@ def check_out():
         exit_time_utc = datetime.datetime.fromisoformat(exit_time_str).astimezone(UTC) if exit_time_str else datetime.datetime.now(UTC)
         conn.execute('UPDATE attendance_logs SET exit_time = ? WHERE id = ?', (exit_time_utc.isoformat(), log_id_to_update))
         conn.execute('UPDATE students SET is_present = 0, current_log_id = NULL WHERE system_id = ?', (system_id,))
+        
+        # 実績判定処理を呼び出す
         ach_result = _handle_notifications(conn, system_id, 'check_out', log_id_to_update)
+        
+        # ▼▼▼ 変更ここから ▼▼▼
+        # 最終的に通知に使うランクを決定する
+        final_rank = ach_result.get('rank') if ach_result and ach_result.get('rank') else student['title']
+        
         conn.commit()
-        return jsonify({'status': 'success', 'message': f'{student["name"]}さんが退室しました。', 'achievement': ach_result})
+
+        # `rank`キーに、最新のランク情報(final_rank)を渡す
+        return jsonify({'status': 'success', 'message': f'{student["name"]}さんが退室しました。', 'rank': final_rank, 'achievement': ach_result})
+        # ▲▲▲ 変更ここまで ▲▲▲
+
     except Exception as e:
         conn.rollback(); return jsonify({'status': 'error', 'message': f'データベースエラー: {e}'}), 500
     finally:
@@ -188,7 +213,8 @@ def qr_process():
     try:
         _reset_forgotten_checkin_status(conn, system_id)
         
-        student = conn.execute('SELECT is_present, name, current_log_id FROM students WHERE system_id = ?', (system_id,)).fetchone()
+        # ▼▼▼ 変更点1: `title`列を取得するようにSQL文を修正 ▼▼▼
+        student = conn.execute('SELECT is_present, name, title, current_log_id FROM students WHERE system_id = ?', (system_id,)).fetchone()
         if not student: return jsonify({'status': 'error', 'message': '該当する生徒が見つかりません。'}), 404
 
         message, ach_result = "", None
@@ -208,8 +234,14 @@ def qr_process():
             message = f'{student["name"]}さんが自習室に入室しました。'
             ach_result = _handle_notifications(conn, system_id, 'check_in', new_log_id)
         
+        # ▼▼▼ 変更点2: 最新の称号情報を決定し、レスポンスに含める ▼▼▼
+        final_rank = ach_result.get('rank') if ach_result and ach_result.get('rank') else student['title']
+        
         conn.commit()
-        return jsonify({'status': 'success', 'message': message, 'achievement': ach_result})
+        
+        return jsonify({'status': 'success', 'message': message, 'rank': final_rank, 'achievement': ach_result})
+        # ▲▲▲ 変更ここまで ▲▲▲
+
     except Exception as e:
         conn.rollback(); return jsonify({'status': 'error', 'message': f'データベースエラー: {e}'}), 500
     finally:

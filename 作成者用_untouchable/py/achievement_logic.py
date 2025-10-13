@@ -191,12 +191,21 @@ def check_achievements(conn, system_id, event_type, current_log_id=None):
     elif event_type == 'check_out' and current_log_id:
         achieved = _check_monthly_hours(conn, system_id, current_log_id)
         if not achieved: achieved = _check_late_finisher(conn, system_id)
+        
     if achieved:
         code, params = achieved['code'], achieved['params']
         messages = ACHIEVEMENT_MESSAGES[code]
         student_message = messages['student'].format(**params)
         guardian_message = messages['guardian'].format(name=student_name, **params) if 'guardian' in messages else None
-        return {'student_message': student_message, 'guardian_message': guardian_message, 'rank': student_info['title']}
+        # デフォルトでは、現在の称号を返すように設定
+        rank_to_return = student_info['title']
+        
+        # もし達成した実績が月間ランキングの場合、
+        # DB更新後の最新の称号（メッセージ定義に含まれる'title'）を返すように上書きする
+        if code.startswith('monthly_rank_'):
+            rank_to_return = messages.get('title')
+            
+        return {'student_message': student_message, 'guardian_message': guardian_message, 'rank': rank_to_return}
     
     last_phrase_id_row = conn.execute("SELECT last_phrase_id FROM students WHERE system_id = ?", (system_id,)).fetchone()
     last_phrase_id = last_phrase_id_row['last_phrase_id'] if last_phrase_id_row and last_phrase_id_row['last_phrase_id'] is not None else 0
