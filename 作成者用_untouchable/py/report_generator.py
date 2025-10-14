@@ -48,8 +48,10 @@ def create_report(db_path, start_date_str, end_date_str):
             return "No data", f"{start_date_str}から{end_date_str}の期間にデータはありませんでした。"
 
         # --- データ前処理 ---
-        df['entry_time'] = pd.to_datetime(df['entry_time']).dt.tz_localize('UTC').dt.tz_convert(JST)
-        df['exit_time'] = pd.to_datetime(df['exit_time'], errors='coerce').dt.tz_localize('UTC').dt.tz_convert(JST)
+        # --- データ前処理 ---
+        # format='ISO8601' を追加して、様々な形式のISO8601文字列に正しく対応する
+        df['entry_time'] = pd.to_datetime(df['entry_time'], format='ISO8601').dt.tz_convert(JST)
+        df['exit_time'] = pd.to_datetime(df['exit_time'], errors='coerce', format='ISO8601').dt.tz_convert(JST)
 
         completed_logs = df.dropna(subset=['exit_time'])
          # 先に滞在時間（分）を計算する
