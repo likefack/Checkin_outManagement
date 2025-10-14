@@ -48,13 +48,16 @@ def create_report(db_path, start_date_str, end_date_str):
             return "No data", f"{start_date_str}から{end_date_str}の期間にデータはありませんでした。"
 
         # --- データ前処理 ---
-        df['entry_time'] = pd.to_datetime(df['entry_time'], format='ISO8601').dt.tz_convert(JST)
-        df['exit_time'] = pd.to_datetime(df['exit_time'], format='ISO8601', errors='coerce').dt.tz_convert(JST)
+        df['entry_time'] = pd.to_datetime(df['entry_time']).dt.tz_localize('UTC').dt.tz_convert(JST)
+        df['exit_time'] = pd.to_datetime(df['exit_time'], errors='coerce').dt.tz_localize('UTC').dt.tz_convert(JST)
 
         completed_logs = df.dropna(subset=['exit_time'])
-        avg_stay_minutes_map = completed_logs.groupby('system_id').apply(
-            lambda x: (x['exit_time'] - x['entry_time']).dt.total_seconds().mean() / 60
-        ).round(1)
+         # 先に滞在時間（分）を計算する
+        # この時点で exit_time と entry_time は日時型なので、安全に計算できる
+        completed_logs['stay_minutes'] = (completed_logs['exit_time'] - completed_logs['entry_time']).dt.total_seconds() / 60
+
+        # system_id ごとに平均滞在時間を計算する
+        avg_stay_minutes_map = completed_logs.groupby('system_id')['stay_minutes'].mean().round(1)
 
         forgot_exit_mask = df['exit_time'].isnull()
         df['stay_minutes_imputed'] = df['system_id'].map(avg_stay_minutes_map).fillna(120)
@@ -161,15 +164,18 @@ def create_report(db_path, start_date_str, end_date_str):
                 first_use_date=('date', 'min'),
                 most_used_hour=('entry_hour_jp', lambda x: x.mode()[0])
             ).reset_index()
-            # 曜日ごとの利用日数を集計
+             # 曜日ごとの利用日数を集計
             dow_counts = pd.crosstab(df_daily_unique_users['system_id'], df_daily_unique_users['day_of_week_jp'])
             
-            # 月〜日のカラム順に並び替え、記録がない曜日も0で埋める
+            # 月〜日のカラム順に並び替え
             dow_order = ['月', '火', '水', '木', '金', '土', '日']
             dow_counts = dow_counts.reindex(columns=dow_order, fill_value=0)
 
             # 曜日ごとの集計結果をメインのサマリーに結合
             df_user_summary = pd.merge(df_user_summary, dow_counts, on='system_id', how='left')
+            
+            # [修正] 結合によって発生したNaN(欠損値)を0で埋め、データ型を整数に変換する
+            df_user_summary[dow_order] = df_user_summary[dow_order].fillna(0).astype(int)
             # 結合後に不要になったsystem_id列を削除
             df_user_summary.drop(columns=['system_id'], inplace=True)
             df_user_summary['weekly_avg_checkins'] = round(df_user_summary['unique_days_attended'] / num_weeks, 1)
