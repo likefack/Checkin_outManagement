@@ -53,10 +53,11 @@ def create_report(db_path, start_date_str, end_date_str):
         df['entry_time'] = pd.to_datetime(df['entry_time'], format='ISO8601').dt.tz_convert(JST)
         df['exit_time'] = pd.to_datetime(df['exit_time'], errors='coerce', format='ISO8601').dt.tz_convert(JST)
 
-        completed_logs = df.dropna(subset=['exit_time'])
+        completed_logs = df.dropna(subset=['exit_time']).copy()
+
          # 先に滞在時間（分）を計算する
         # この時点で exit_time と entry_time は日時型なので、安全に計算できる
-        completed_logs['stay_minutes'] = (completed_logs['exit_time'] - completed_logs['entry_time']).dt.total_seconds() / 60
+        completed_logs.loc[:, 'stay_minutes'] = (completed_logs['exit_time'] - completed_logs['entry_time']).dt.total_seconds() / 60
 
         # system_id ごとに平均滞在時間を計算する
         avg_stay_minutes_map = completed_logs.groupby('system_id')['stay_minutes'].mean().round(1)
