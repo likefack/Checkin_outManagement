@@ -108,41 +108,112 @@ def index():
 @app.route('/api/initial_data')
 def get_initial_data():
     now_jst = datetime.datetime.now(JST)
+    today_date = now_jst.date() # 今日の日付を取得
     start_of_day_jst = now_jst.replace(hour=0, minute=0, second=0, microsecond=0)
     start_of_day_utc = start_of_day_jst.astimezone(UTC)
     conn = get_db_connection()
-    students_cursor = conn.execute('SELECT system_id, name, grade, class, student_number, is_present, current_log_id FROM students ORDER BY grade, class, student_number')
-    all_students = {s['system_id']: dict(s) for s in students_cursor.fetchall()}
-    students_data_nested = {}
-    for sid, student in all_students.items():
-        grade, class_num, number = student['grade'], student['class'], student['student_number']
-        student['is_present'] = student['is_present'] == 1
-        if grade not in students_data_nested: students_data_nested[grade] = {}
-        if class_num not in students_data_nested[grade]: students_data_nested[grade][class_num] = {}
-        students_data_nested[grade][class_num][number] = student
-    attendees_cursor = conn.execute('SELECT al.id AS log_id, s.system_id, al.seat_number, al.entry_time, al.exit_time, s.name, s.grade, s.class, s.student_number FROM attendance_logs al JOIN students s ON al.system_id = s.system_id WHERE al.entry_time >= ? ORDER BY al.entry_time ASC', (start_of_day_utc.isoformat(),))
-    current_attendees = [dict(row) for row in attendees_cursor.fetchall()]
-    conn.close()
-    return jsonify({'students': students_data_nested, 'attendees': current_attendees})
+
+    try: # データベース操作全体をtry...finallyで囲む
+        students_cursor = conn.execute('SELECT system_id, name, grade, class, student_number, is_present, current_log_id FROM students ORDER BY grade, class, student_number')
+        all_students_list = students_cursor.fetchall() # 一度リストとして取得
+
+        students_data_nested = {}
+        # ▼▼▼ 修正点: is_present の状態を日付でチェックして上書き ▼▼▼
+        ids_to_reset = [] # DBリセット対象のsystem_idリスト
+        for student_row in all_students_list:
+            student = dict(student_row) # Rowオブジェクトを辞書に変換
+            is_present_db = student['is_present'] == 1
+            current_log_id = student['current_log_id']
+            is_present_today_for_frontend = False # フロントエンドに返す値（デフォルトFalse）
+
+            if is_present_db and current_log_id:
+                # 入室中の場合、ログの日付を確認
+                log_entry = conn.execute('SELECT entry_time FROM attendance_logs WHERE id = ?', (current_log_id,)).fetchone()
+                if log_entry:
+                    entry_time_jst = parse_db_time_to_jst(log_entry['entry_time'])
+                    if entry_time_jst and entry_time_jst.date() == today_date:
+                        # 今日の記録ならフロントエンドにも True を返す
+                        is_present_today_for_frontend = True
+                    else:
+                        # 前日以前の記録ならリセット対象に追加
+                        ids_to_reset.append(student['system_id'])
+                        print(f"ID:{student['system_id']} の前日以前の入室記録を検出(initial_data)。リセット対象に追加。")
+            # else: is_present が 0 または log_id がない場合は is_present_today_for_frontend は False のまま
+
+            # フロントエンドに返す is_present を設定
+            student['is_present'] = is_present_today_for_frontend
+
+            # ネスト構造に格納 (ここは変更なし)
+            grade, class_num, number = student['grade'], student['class'], student['student_number']
+            if grade not in students_data_nested: students_data_nested[grade] = {}
+            if class_num not in students_data_nested[grade]: students_data_nested[grade][class_num] = {}
+            students_data_nested[grade][class_num][number] = student
+
+        # ▼▼▼ 修正点: リセット対象の生徒のDBステータスを更新 ▼▼▼
+        if ids_to_reset:
+            # プレースホルダーを使って安全にUPDATE文を実行
+            placeholders = ','.join('?' * len(ids_to_reset))
+            conn.execute(f'UPDATE students SET is_present = 0, current_log_id = NULL WHERE system_id IN ({placeholders})', ids_to_reset)
+            conn.commit()
+            print(f"リセット対象 {len(ids_to_reset)} 件のステータスをDBでリセットしました。")
+
+        # 今日の入退室記録を取得 (ここは変更なし)
+        attendees_cursor = conn.execute('SELECT al.id AS log_id, s.system_id, al.seat_number, al.entry_time, al.exit_time, s.name, s.grade, s.class, s.student_number FROM attendance_logs al JOIN students s ON al.system_id = s.system_id WHERE al.entry_time >= ? ORDER BY al.entry_time ASC', (start_of_day_utc.isoformat(),))
+        current_attendees = [dict(row) for row in attendees_cursor.fetchall()]
+
+        return jsonify({'students': students_data_nested, 'attendees': current_attendees})
+
+    except Exception as e:
+        print(f"Error in get_initial_data: {e}")
+        # エラーが発生した場合もコネクションを閉じる
+        if conn:
+            conn.close()
+        return jsonify({'status': 'error', 'message': f'初期データの取得中にエラーが発生しました: {e}'}), 500
+    finally:
+        # 正常終了時もコネクションを閉じる
+        if conn:
+            conn.close()
 
 @app.route('/api/check_in', methods=['POST'])
 def check_in():
     data = request.json
     system_id, seat_number = data.get('system_id'), data.get('seat_number')
-    if not system_id or not seat_number: return jsonify({'status': 'error', 'message': 'IDまたは座席番号がありません。'}), 400
-    
+    if not system_id or not seat_number:
+        return jsonify({'status': 'error', 'message': 'IDまたは座席番号がありません。'}), 400
+
     conn = get_db_connection()
     try:
-        _reset_forgotten_checkin_status(conn, system_id)
-        
-        student = conn.execute('SELECT is_present, name, title FROM students WHERE system_id = ?', (system_id,)).fetchone()
-        if student and student['is_present']:
-            return jsonify({'status': 'error', 'message': f'{student["name"]}さんは既に入室済みです。'}), 409
-        
-        entry_time_utc = datetime.datetime.now(UTC)
-        cursor = conn.execute('INSERT INTO attendance_logs (system_id, seat_number, entry_time) VALUES (?, ?, ?)', (system_id, seat_number, entry_time_utc.isoformat()))
-        new_log_id = cursor.lastrowid
-        conn.execute('UPDATE students SET is_present = 1, current_log_id = ? WHERE system_id = ?', (new_log_id, system_id))
+        # ▼▼▼ 修正点1: まず現在の生徒情報を取得 ▼▼▼
+        student = conn.execute('SELECT is_present, name, title, current_log_id FROM students WHERE system_id = ?', (system_id,)).fetchone()
+        if not student:
+             return jsonify({'status': 'error', 'message': '該当する生徒が見つかりません。'}), 404 # 生徒が見つからない場合のエラーを追加
+
+        is_present_today = False
+        # ▼▼▼ 修正点2: is_present が True の場合、それが今日の記録か確認 ▼▼▼
+        if student['is_present'] and student['current_log_id']:
+            log_entry = conn.execute('SELECT entry_time FROM attendance_logs WHERE id = ?', (student['current_log_id'],)).fetchone()
+            if log_entry:
+                entry_time_jst = parse_db_time_to_jst(log_entry['entry_time'])
+                if entry_time_jst and entry_time_jst.date() == datetime.datetime.now(JST).date():
+                    is_present_today = True
+                else:
+                    # 前日以前の記録ならリセット
+                    print(f"ID:{system_id} の前日以前の入室記録を検出(check_in)。ステータスをリセットします。")
+                    conn.execute('UPDATE students SET is_present = 0, current_log_id = NULL WHERE system_id = ?', (system_id,))
+                    print(f"ID:{system_id} のステータスをリセットしました。")
+                    # student 変数はここでは再取得不要（入室処理に進むため）
+
+        # ▼▼▼ 修正点3: 今日の記録があるかで分岐 ▼▼▼
+        if is_present_today:
+            # 既に今日入室済みの場合 (手動入室ではエラーとする)
+            conn.close() # エラーを返す前にコネクションを閉じる
+            return jsonify({'status': 'error', 'message': f'{student["name"]}さんは本日既に入室済みです。'}), 409
+        else:
+            # --- 入室処理 ---
+            entry_time_utc = datetime.datetime.now(UTC)
+            cursor = conn.execute('INSERT INTO attendance_logs (system_id, seat_number, entry_time) VALUES (?, ?, ?)', (system_id, seat_number, entry_time_utc.isoformat()))
+            new_log_id = cursor.lastrowid
+            conn.execute('UPDATE students SET is_present = 1, current_log_id = ? WHERE system_id = ?', (new_log_id, system_id))
         
         # 実績判定処理を呼び出す
         ach_result = _handle_notifications(conn, system_id, 'check_in', new_log_id)
@@ -207,45 +278,79 @@ def check_out():
 @app.route('/api/qr_process', methods=['POST'])
 def qr_process():
     data = request.json
-    system_id = int(data.get('system_id'))
+    try: # system_id が数値でない場合のエラーを捕捉
+        system_id = int(data.get('system_id'))
+    except (ValueError, TypeError):
+        return jsonify({'status': 'error', 'message': '無効なID形式です。'}), 400
+
     if not system_id: return jsonify({'status': 'error', 'message': 'IDがありません。'}), 400
     conn = get_db_connection()
     try:
-        _reset_forgotten_checkin_status(conn, system_id)
-        
-        # ▼▼▼ 変更点1: `title`列を取得するようにSQL文を修正 ▼▼▼
+        # ▼▼▼ 修正点1: まず生徒情報を取得 ▼▼▼
         student = conn.execute('SELECT is_present, name, title, current_log_id FROM students WHERE system_id = ?', (system_id,)).fetchone()
         if not student: return jsonify({'status': 'error', 'message': '該当する生徒が見つかりません。'}), 404
 
+        is_present_today = False
+        # ▼▼▼ 修正点2: is_present が True の場合、それが今日の記録か確認 ▼▼▼
+        if student['is_present'] and student['current_log_id']:
+            log_entry = conn.execute('SELECT entry_time FROM attendance_logs WHERE id = ?', (student['current_log_id'],)).fetchone()
+            if log_entry:
+                entry_time_jst = parse_db_time_to_jst(log_entry['entry_time'])
+                # entry_timeが取得でき、かつそれが今日の日付であれば True
+                if entry_time_jst and entry_time_jst.date() == datetime.datetime.now(JST).date():
+                    is_present_today = True
+                else:
+                    # ★★★ 前日以前の記録なら、ここで強制的にリセット ★★★
+                    print(f"ID:{system_id} の前日以前の入室記録を検出(qr_process)。ステータスをリセットします。")
+                    conn.execute('UPDATE students SET is_present = 0, current_log_id = NULL WHERE system_id = ?', (system_id,))
+                    print(f"ID:{system_id} のステータスをリセットしました。")
+                    # is_present_today は False のまま（=入室処理へ）
+
         message, ach_result = "", None
-        if student['is_present']:
+        # ▼▼▼ 修正点3: 「今日」入室しているかどうかで分岐 ▼▼▼
+        if is_present_today:
+            # --- 退室処理 ---
             exit_time_utc = datetime.datetime.now(UTC)
             log_id_to_update = student['current_log_id']
+            # log_idがない場合はエラー（通常は起こらないはず）
             if not log_id_to_update: return jsonify({'status': 'error', 'message': '有効な退室記録が見つかりません。'}), 409
+
+            # 念のため、対象ログが本当に未退室か確認
+            log_to_exit = conn.execute('SELECT exit_time FROM attendance_logs WHERE id = ?', (log_id_to_update,)).fetchone()
+            if not log_to_exit: return jsonify({'status': 'error', 'message': f'内部エラー: ログID {log_id_to_update} が見つかりません。'}), 500
+            if log_to_exit['exit_time']: return jsonify({'status': 'info', 'message': '既に退室処理済みです。'}), 200 # 重複退室はエラーにしない
+
             conn.execute('UPDATE attendance_logs SET exit_time = ? WHERE id = ?', (exit_time_utc.isoformat(), log_id_to_update))
             conn.execute('UPDATE students SET is_present = 0, current_log_id = NULL WHERE system_id = ?', (system_id,))
             message = f'{student["name"]}さんが自習室から退室しました。'
             ach_result = _handle_notifications(conn, system_id, 'check_out', log_id_to_update)
         else:
+            # --- 入室処理 ---
             entry_time_utc = datetime.datetime.now(UTC)
             cursor = conn.execute('INSERT INTO attendance_logs (system_id, entry_time) VALUES (?, ?)', (system_id, entry_time_utc.isoformat()))
             new_log_id = cursor.lastrowid
             conn.execute('UPDATE students SET is_present = 1, current_log_id = ? WHERE system_id = ?', (new_log_id, system_id))
             message = f'{student["name"]}さんが自習室に入室しました。'
             ach_result = _handle_notifications(conn, system_id, 'check_in', new_log_id)
-        
-        # ▼▼▼ 変更点2: 最新の称号情報を決定し、レスポンスに含める ▼▼▼
-        final_rank = ach_result.get('rank') if ach_result and ach_result.get('rank') else student['title']
-        
+
+        # 最新の称号情報を決定（変更なし）
+        # student変数はリセット時に再取得しないため、必要ならここで再取得
+        current_student_state = conn.execute('SELECT title FROM students WHERE system_id = ?', (system_id,)).fetchone()
+        current_title = current_student_state['title'] if current_student_state else None
+        final_rank = ach_result.get('rank') if ach_result and ach_result.get('rank') else current_title
+
         conn.commit()
-        
+
         return jsonify({'status': 'success', 'message': message, 'rank': final_rank, 'achievement': ach_result})
-        # ▲▲▲ 変更ここまで ▲▲▲
 
     except Exception as e:
-        conn.rollback(); return jsonify({'status': 'error', 'message': f'データベースエラー: {e}'}), 500
+        conn.rollback()
+        print(f"Error in qr_process: {e}") # エラーログを追加
+        return jsonify({'status': 'error', 'message': f'データベースエラー: {e}'}), 500
     finally:
-        conn.close()
+        # finallyブロックで確実にコネクションを閉じる
+        if conn:
+            conn.close()
 
 # ★★★ 修正: `exit_all`関数を新しい仕様に合わせて修正 ★★★
 @app.route('/api/exit_all', methods=['POST'])
