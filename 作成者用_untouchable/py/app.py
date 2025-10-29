@@ -2,6 +2,7 @@ import os
 import sqlite3
 import datetime
 import pytz 
+import traceback
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
 import database 
@@ -425,6 +426,8 @@ def convert_to_utc(time_str):
 
 @app.route('/api/logs', methods=['GET'])
 def get_logs():
+    print(f"[デバッグ] /api/logs が呼び出されました。")
+    print(f"[デバッグ] 受け取った全パラメータ: {request.args}")
     log_id = request.args.get('id')
     if log_id:
         conn = get_db_connection()
@@ -442,7 +445,7 @@ def get_logs():
         'name': request.args.get('name'), 'grade': request.args.get('grade'),
         'class': request.args.get('class'), 'number': request.args.get('number'),
     }
-
+    print(f"[デバッグ] 抽出したフィルター値: {filters}") 
     conn = get_db_connection()
     all_students_cursor = conn.execute('SELECT system_id, name, grade, class, student_number FROM students')
     all_students = [dict(row) for row in all_students_cursor.fetchall()]
@@ -452,12 +455,42 @@ def get_logs():
     conditions, params = [], []
 
     if filters['start']:
-        start_utc = JST.localize(datetime.datetime.strptime(filters['start'], '%Y-%m-%d')).astimezone(UTC).isoformat()
-        conditions.append("al.entry_time >= ?"); params.append(start_utc)
+        start_raw = filters['start'] # 元の値を保持
+        print(f"[デバッグ] 受け取った開始日: {start_raw}") # ★デバッグ出力追加
+        try:
+            start_dt_naive = datetime.datetime.strptime(start_raw, '%Y-%m-%d')
+            start_dt_jst = JST.localize(start_dt_naive.replace(hour=0, minute=0, second=0))
+            start_utc_iso = start_dt_jst.astimezone(UTC).isoformat()
+            conditions.append("al.entry_time >= ?")
+            params.append(start_utc_iso)
+            print(f"[デバッグ] 変換後の開始日(UTC ISO): {start_utc_iso}") # ★デバッグ出力追加
+        except ValueError as e:
+            # ★エラー発生時の詳細ログ出力
+            print(f"【エラー】開始日の変換に失敗しました。入力値: '{start_raw}', エラー: {e}")
+            print(traceback.format_exc()) # ★エラーの詳細な発生箇所を出力
+        except Exception as e:
+            # ★予期せぬエラー発生時のログ出力
+            print(f"【予期せぬエラー】開始日の処理中に問題が発生しました。入力値: '{start_raw}', エラー: {e}")
+            print(traceback.format_exc()) # ★エラーの詳細な発生箇所を出力
+
     if filters['end']:
-        end_dt = datetime.datetime.strptime(filters['end'], '%Y-%m-%d').replace(hour=23, minute=59, second=59)
-        end_utc = JST.localize(end_dt).astimezone(UTC).isoformat()
-        conditions.append("al.entry_time <= ?"); params.append(end_utc)
+        end_raw = filters['end'] # 元の値を保持
+        print(f"[デバッグ] 受け取った終了日: {end_raw}") # ★デバッグ出力追加
+        try:
+            end_dt_naive = datetime.datetime.strptime(end_raw, '%Y-%m-%d')
+            end_dt_jst = JST.localize(end_dt_naive.replace(hour=23, minute=59, second=59, microsecond=999999))
+            end_utc_iso = end_dt_jst.astimezone(UTC).isoformat()
+            conditions.append("al.entry_time <= ?")
+            params.append(end_utc_iso)
+            print(f"[デバッグ] 変換後の終了日(UTC ISO): {end_utc_iso}") # ★デバッグ出力追加
+        except ValueError as e:
+            # ★エラー発生時の詳細ログ出力
+            print(f"【エラー】終了日の変換に失敗しました。入力値: '{end_raw}', エラー: {e}")
+            print(traceback.format_exc()) # ★エラーの詳細な発生箇所を出力
+        except Exception as e:
+            # ★予期せぬエラー発生時のログ出力
+            print(f"【予期せぬエラー】終了日の処理中に問題が発生しました。入力値: '{end_raw}', エラー: {e}")
+            print(traceback.format_exc()) # ★エラーの詳細な発生箇所を出力
     if filters['name']:
         conditions.append("s.name LIKE ?"); params.append(f"%{filters['name']}%")
     if filters['grade']:
@@ -468,8 +501,11 @@ def get_logs():
         conditions.append("s.student_number = ?"); params.append(filters['number'])
 
     if conditions:
-        query += " WHERE " + " AND ".join(conditions)
-        count_query += " WHERE " + " AND ".join(conditions)
+        where_clause = " WHERE " + " AND ".join(conditions)
+        query += where_clause
+        count_query += where_clause
+        print(f"[デバッグ] SQL条件: {where_clause}") # ★デバッグ出力追加
+        print(f"[デバッグ] SQLパラメータ: {params}") # ★デバッグ出力追加
 
     total = conn.execute(count_query, params).fetchone()[0]
     
