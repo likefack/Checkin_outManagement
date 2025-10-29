@@ -94,10 +94,20 @@ function setupEventListeners() {
 async function fetchLogs() {
     const params = new URLSearchParams({ page: currentPage, per_page: logsPerPage, sort: currentSort.column, dir: currentSort.direction });
     const period = dom.filterPeriod.value;
-    if (period.includes(' to ')) {
-        const [start, end] = period.split(' to ');
-        params.append('start', start);
-        params.append('end', end);
+    // 日本語ロケールの区切り文字 " から " を使用
+    if (period.includes(' から ')) {
+        const [start, end] = period.split(' から ');
+        // 分割した start と end の値が存在すれば、それぞれのパラメータに追加
+        if (start) {
+            params.append('start', start.trim()); // 前後の空白を削除
+        }
+        if (end) {
+            params.append('end', end.trim());     // 前後の空白を削除
+        }
+    } else if (period) { // 単一日選択の場合
+        // 単一日でも start と end の両方に同じ日付を設定
+        params.append('start', period);
+        params.append('end', period);
     }
     if(dom.filterName.value) params.append('name', dom.filterName.value);
     if(dom.filterGrade.value) params.append('grade', dom.filterGrade.value);
