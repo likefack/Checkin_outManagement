@@ -74,7 +74,7 @@ def _handle_notifications(conn, system_id, event_type, log_id):
     if event_type == 'check_in':
         entry_time_jst = parse_db_time_to_jst(log_entry['entry_time'])
         subject = f"【{app_name}】{student['name']}さんの入室通知"
-        body = f"{student['name']}の保護者様\n\nお世話になっております、{org_name}の{sender_name}です。\n\n{student['name']}さんが{entry_time_jst.strftime('%H時%M分')}に入室されたことをお知らせします。\n{guardian_message}\n\n今後ともよろしくお願いいたします。\n{sender_name}"
+        body = f"{student['name']}さんの保護者様\n\nお世話になっております、{org_name}の{sender_name}です。\n\n{student['name']}さんが{entry_time_jst.strftime('%H時%M分')}に入室されたことをお知らせします。\n{guardian_message}\n\n今後ともよろしくお願いいたします。\n{sender_name}"
         send_email_async(student['guardian_email'], subject, body)
     elif event_type == 'check_out':
         entry_time_jst = parse_db_time_to_jst(log_entry['entry_time'])
