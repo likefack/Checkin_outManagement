@@ -46,8 +46,7 @@ def create_report(db_path, start_date_str, end_date_str):
 
         if df.empty:
             return "No data", f"{start_date_str}から{end_date_str}の期間にデータはありませんでした。"
-
-        # --- データ前処理 ---
+        
         # --- データ前処理 ---
         # format='ISO8601' を追加して、様々な形式のISO8601文字列に正しく対応する
         df['entry_time'] = pd.to_datetime(df['entry_time'], format='ISO8601').dt.tz_convert(JST)
@@ -79,6 +78,52 @@ def create_report(db_path, start_date_str, end_date_str):
 
         with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
             
+            # --- シート0: 入退さん【手入力用】にコピペ ---
+            df_copy_paste = df.copy() # 元のデータをコピーして作業
+
+            # 1. 中高を除いた数字のみの学年を作成
+            df_copy_paste['学年_数値'] = df_copy_paste['grade_jp'].str.extract('(\d+)').astype(int)
+
+            # 2. 入室時間と退室時間を HH:MM 形式にフォーマット
+            df_copy_paste['入室時間_HM'] = df_copy_paste['entry_time'].dt.strftime('%H:%M')
+            # 退室時間が空欄でない場合のみフォーマット、空欄の場合は空文字列
+            df_copy_paste['退室時間_HM'] = df_copy_paste['exit_time'].apply(lambda x: x.strftime('%H:%M') if pd.notna(x) else '')
+
+            # 3. その日の何回目の入室かを計算
+            # 日付と生徒IDでグループ化し、入室時間でランク付け（同時間の場合は最初に入った方を1番とする）
+            df_copy_paste['入室回数'] = df_copy_paste.groupby(['date', 'system_id'])['entry_time'].rank(method='first').astype(int)
+
+            # 4. 中高の区分を作成
+            df_copy_paste['中高'] = df_copy_paste['grade_jp'].str[0] # 先頭の一文字（中 or 高）を取得
+
+            # 5. 必要な列を順番通りに選択
+            df_final_copy_paste = df_copy_paste[[
+                'ID',
+                '学年_数値',
+                'class',
+                'student_number',
+                'name',
+                '入室時間_HM',
+                '退室時間_HM',
+                '入室回数',
+                '中高'
+            ]]
+
+            # 6. Excelに出力する際の列名（ヘッダー）を変更
+            df_final_copy_paste.columns = [
+                'ID',
+                '学年',
+                '組',
+                '番',
+                '名前',
+                '入室時間',
+                '退室時間',
+                '回数',
+                '中高'
+            ]
+
+            # 7. Excelファイルの一番目のシートとして書き出す（インデックスは不要）
+            df_final_copy_paste.to_excel(writer, sheet_name='入退さん【手入力用】にコピペ', index=False)
             # --- シート1: 日別ユニーク学年組別サマリー ---
             # 存在するすべての学年・組のリストをマスターから取得
             all_grades_jp = sorted(students_master['grade'].map(GRADE_MAP).unique(), key=lambda x: list(GRADE_MAP.values()).index(x))
