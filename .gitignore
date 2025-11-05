@@ -1,3 +1,8 @@
 作成者用_untouchable/students.db
 作成者用_untouchable/py/__pycache__/report_generator.cpython-313.pyc
-管理者用_touchable/logs/集計レポート_20251010-20251012.xlsx
+管理者用_touchable/logs/集計レポート_*.xlsx
+管理者用_touchable/.env
+作成者用_untouchable/students.db
+作成者用_untouchable/venv/
+作成者用_untouchable/certs/cert.pem
+作成者用_untouchable/certs/key.pem
