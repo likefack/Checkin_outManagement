@@ -123,7 +123,7 @@ def create_report(db_path, start_date_str, end_date_str):
             ]
 
             # 7. Excelファイルの一番目のシートとして書き出す（インデックスは不要）
-            df_final_copy_paste.to_excel(writer, sheet_name='入退さん【手入力用】にコピペ', index=False)
+            df_final_copy_paste.to_excel(writer, sheet_name='日報人数カウント用', index=False)
             # --- シート1: 日別ユニーク学年組別サマリー ---
             # 存在するすべての学年・組のリストをマスターから取得
             all_grades_jp = sorted(students_master['grade'].map(GRADE_MAP).unique(), key=lambda x: list(GRADE_MAP.values()).index(x))
