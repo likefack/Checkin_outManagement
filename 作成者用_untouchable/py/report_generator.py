@@ -50,8 +50,8 @@ def create_report(db_path, start_date_str, end_date_str):
         
         # --- データ前処理 ---
         # format='ISO8601' を追加して、様々な形式のISO8601文字列に正しく対応する
-        df['entry_time'] = pd.to_datetime(df['entry_time'], format='ISO8601').dt.tz_convert(JST)
-        df['exit_time'] = pd.to_datetime(df['exit_time'], errors='coerce', format='ISO8601').dt.tz_convert(JST)
+        df['entry_time'] = pd.to_datetime(df['entry_time'], format='ISO8601', utc=True).dt.tz_convert(JST)
+        df['exit_time'] = pd.to_datetime(df['exit_time'], errors='coerce', format='ISO8601', utc=True).dt.tz_convert(JST)
 
         completed_logs = df.dropna(subset=['exit_time']).copy()
 
