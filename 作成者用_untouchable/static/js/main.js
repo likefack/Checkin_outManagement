@@ -441,7 +441,18 @@ function resetAllSelectors() {
 }
 function populateSeatSelect() { 
     resetSelect(dom.seatSelect, "");
-    for (let i = 1; i <= MAX_SEAT_NUMBER; i++) {
+    
+    // 臨時教室の選択肢を追加
+    const extraRooms = ['223教室', '224教室', '225教室'];
+    extraRooms.forEach(room => {
+        const option = document.createElement('option');
+        option.value = room;
+        option.textContent = room;
+        dom.seatSelect.appendChild(option);
+    });
+
+    // 座席番号 (1〜72) を追加
+    for (let i = 1; i <= 72; i++) {
         const option = document.createElement('option');
         option.value = i;
         option.textContent = i;
