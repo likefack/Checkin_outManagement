@@ -443,7 +443,7 @@ function populateSeatSelect() {
     resetSelect(dom.seatSelect, "");
     
     // 臨時教室の選択肢を追加
-    const extraRooms = ['223教室', '224教室', '225教室'];
+    const extraRooms = ['座席なし', '223教室', '224教室', '225教室'];
     extraRooms.forEach(room => {
         const option = document.createElement('option');
         option.value = room;
