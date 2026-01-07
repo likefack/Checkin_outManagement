@@ -108,7 +108,20 @@ function setupEventListeners() {
     dom.attendanceTableBody.addEventListener('click', handleTableClick);
 
     if (APP_MODE === 'admin') {
-        dom.qrInput.addEventListener('blur', focusQrInput);
+        // 修正: 意図的に他の入力要素へフォーカスした場合は、QR入力欄への強制フォーカス戻しを行わない
+        dom.qrInput.addEventListener('blur', (e) => {
+            const newTarget = e.relatedTarget;
+            // フォーカス移動先がセレクトボックス、入力、ボタン、またはカレンダー等の場合は何もしない
+            if (newTarget && (
+                newTarget.tagName === 'SELECT' || 
+                newTarget.tagName === 'INPUT' || 
+                newTarget.tagName === 'BUTTON' ||
+                newTarget.closest('.flatpickr-calendar')
+            )) {
+                return;
+            }
+            focusQrInput();
+        });
         dom.qrInput.addEventListener('keydown', handleQrInput); 
         dom.exitAllBtn.addEventListener('click', handleExitAll);
         dom.createReportBtn.addEventListener('click', handleCreateReport);
@@ -305,10 +318,22 @@ function normalizeSystemId(id) {
 
 // --- UI更新・操作系の関数 ---
 function populateGradeSelect() {
-    const selectedValue = dom.gradeSelect.value;
-    resetSelect(dom.gradeSelect, ""); 
     const grades = Object.keys(studentsData);
     grades.sort((a, b) => a - b);
+
+    // 現在のDOMのオプション値を取得（空の選択肢を除く）して比較
+    const currentOptions = Array.from(dom.gradeSelect.options)
+        .map(opt => opt.value)
+        .filter(val => val !== "");
+
+    // 変更がない場合はDOM再構築を行わない（操作中のセレクトボックスが閉じるのを防ぐため）
+    if (currentOptions.length === grades.length && 
+        currentOptions.every((val, index) => val === grades[index])) {
+        return;
+    }
+
+    const selectedValue = dom.gradeSelect.value;
+    resetSelect(dom.gradeSelect, ""); 
     grades.forEach(grade => {
         const option = document.createElement('option');
         option.value = grade;
