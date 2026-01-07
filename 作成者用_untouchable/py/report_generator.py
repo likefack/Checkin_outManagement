@@ -8,6 +8,7 @@ import pytz
 JST = pytz.timezone('Asia/Tokyo')
 UTC = pytz.utc
 GRADE_MAP = {1: '中1', 2: '中2', 3: '中3', 4: '高1', 5: '高2', 6: '高3'}
+GRADE_ALPHABET_MAP = {1: 'A', 2: 'B', 3: 'C', 4: 'D', 5: 'E', 6: 'F'}
 DOW_MAP = {'Monday': '月', 'Tuesday': '火', 'Wednesday': '水', 'Thursday': '木', 'Friday': '金', 'Saturday': '土', 'Sunday': '日'}
 
 def create_report(db_path, start_date_str, end_date_str):
@@ -49,8 +50,8 @@ def create_report(db_path, start_date_str, end_date_str):
         
         # --- データ前処理 ---
         # format='ISO8601' を追加して、様々な形式のISO8601文字列に正しく対応する
-        df['entry_time'] = pd.to_datetime(df['entry_time'], format='ISO8601').dt.tz_convert(JST)
-        df['exit_time'] = pd.to_datetime(df['exit_time'], errors='coerce', format='ISO8601').dt.tz_convert(JST)
+        df['entry_time'] = pd.to_datetime(df['entry_time'], format='ISO8601', utc=True).dt.tz_convert(JST)
+        df['exit_time'] = pd.to_datetime(df['exit_time'], errors='coerce', format='ISO8601', utc=True).dt.tz_convert(JST)
 
         completed_logs = df.dropna(subset=['exit_time']).copy()
 
@@ -75,30 +76,45 @@ def create_report(db_path, start_date_str, end_date_str):
         df['day_of_week_jp'] = df['entry_time'].dt.day_name().map(DOW_MAP)
         df['entry_hour'] = df['entry_time'].dt.hour
         df['entry_hour_jp'] = df['entry_hour'].astype(str) + '時台'
+        
+        df = df.sort_values(by='entry_time') # 入室時間が早い順に並び替え（シート0で最初の記録を取得するために必要）
 
         with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
             
-            # --- シート0: 入退さん【手入力用】にコピペ ---
-            df_copy_paste = df.copy() # 元のデータをコピーして作業
+            # --- シート0: 日報人数カウント用 ---
+            # (仕様変更) 日付と生徒IDで重複を削除し、その日最初の入室記録のみを対象とする
+            df_for_sheet0 = df.drop_duplicates(subset=['date', 'system_id'], keep='first')
+            df_copy_paste = df_for_sheet0.copy() # フィルター後のデータを使用
 
-            # 1. 中高を除いた数字のみの学年を作成
-            df_copy_paste['学年_数値'] = df_copy_paste['grade_jp'].str.extract('(\d+)').astype(int)
+            # ★ 1. (仕様変更) IDを 'ID_23C0115' 形式に生成
+            # system_idを文字列に変換（7桁ゼロ埋め）
+            df_copy_paste['system_id_str'] = df_copy_paste['system_id'].astype(str).str.zfill(7)
+            # 学年(数値)をアルファベット(A-F)に変換
+            df_copy_paste['grade_alphabet'] = df_copy_paste['grade'].map(GRADE_ALPHABET_MAP)
+            # 結合してIDを生成: 'ID_' + '23' + 'C' + '0115'
+            # system_idの3文字目(学年)を、マッピングしたアルファベットで置き換える
+            df_copy_paste['ID_formatted'] = 'ID_' + \
+                                            df_copy_paste['system_id_str'].str[0:2] + \
+                                            df_copy_paste['grade_alphabet'] + \
+                                            df_copy_paste['system_id_str'].str[3:]
+
+            # 1-2. 中高を除いた数字のみの学年を作成
+            df_copy_paste['学年_数値'] = df_copy_paste['grade_jp'].str.extract(r'(\d+)').astype(int)
 
             # 2. 入室時間と退室時間を HH:MM 形式にフォーマット
             df_copy_paste['入室時間_HM'] = df_copy_paste['entry_time'].dt.strftime('%H:%M')
             # 退室時間が空欄でない場合のみフォーマット、空欄の場合は空文字列
             df_copy_paste['退室時間_HM'] = df_copy_paste['exit_time'].apply(lambda x: x.strftime('%H:%M') if pd.notna(x) else '')
 
-            # 3. その日の何回目の入室かを計算
-            # 日付と生徒IDでグループ化し、入室時間でランク付け（同時間の場合は最初に入った方を1番とする）
-            df_copy_paste['入室回数'] = df_copy_paste.groupby(['date', 'system_id'])['entry_time'].rank(method='first').astype(int)
+            # 3. その日の何回目の入室かを計算 (ユニーク抽出したため、すべて1になる)
+            df_copy_paste['入室回数'] = 1 # groupby処理を削除し、固定で 1 を設定
 
-            # 4. 中高の区分を作成
-            df_copy_paste['中高'] = df_copy_paste['grade_jp'].str[0] # 先頭の一文字（中 or 高）を取得
+            # 4. 中高の区分を作成 (★ 削除)
+            # df_copy_paste['中高'] = df_copy_paste['grade_jp'].str[0] # この行を削除
 
-            # 5. 必要な列を順番通りに選択
+            # 5. 必要な列を順番通りに選択 (★ ID -> ID_formatted に変更、'中高'を削除)
             df_final_copy_paste = df_copy_paste[[
-                'ID',
+                'ID_formatted', # 変更
                 '学年_数値',
                 'class',
                 'student_number',
@@ -106,10 +122,10 @@ def create_report(db_path, start_date_str, end_date_str):
                 '入室時間_HM',
                 '退室時間_HM',
                 '入室回数',
-                '中高'
+                # '中高' # 削除
             ]]
 
-            # 6. Excelに出力する際の列名（ヘッダー）を変更
+            # 6. Excelに出力する際の列名（ヘッダー）を変更 (★ '中高'を削除)
             df_final_copy_paste.columns = [
                 'ID',
                 '学年',
@@ -119,11 +135,31 @@ def create_report(db_path, start_date_str, end_date_str):
                 '入室時間',
                 '退室時間',
                 '回数',
-                '中高'
+                # '中高' # 削除
             ]
 
-            # 7. Excelファイルの一番目のシートとして書き出す（インデックスは不要）
-            df_final_copy_paste.to_excel(writer, sheet_name='日報人数カウント用', index=False)
+            # 7. Excelファイルの一番目のシートとして書き出す
+            # (仕様変更) シート名を変更し、A1に期間、A2からデータを出力
+            sheet_name = '日報人数カウント用'
+            
+            # データをA2から書き出す (startrow=1) （仕様①）
+            df_final_copy_paste.to_excel(writer, sheet_name=sheet_name, index=False, startrow=1)
+            
+            # openpyxlのワークシートオブジェクトを取得
+            worksheet = writer.sheets[sheet_name]
+            
+            # (仕様変更) A1セルに期間を書き込む （仕様②）
+            if start_date == end_date:
+                # 単一日の場合
+                title_str = start_date.strftime('%Y/%m/%d')
+            else:
+                # 複数日の場合
+                title_str = f"{start_date.strftime('%Y/%m/%d')}～{end_date.strftime('%Y/%m/%d')}"
+            worksheet.cell(row=1, column=1, value=title_str)
+            
+            # (仕様変更) シート見出しの色を黄色に設定 （仕様③）
+            worksheet.sheet_properties.tabColor = "FFFFFF00" # ARGB for Yellow
+
             # --- シート1: 日別ユニーク学年組別サマリー ---
             # 存在するすべての学年・組のリストをマスターから取得
             all_grades_jp = sorted(students_master['grade'].map(GRADE_MAP).unique(), key=lambda x: list(GRADE_MAP.values()).index(x))
