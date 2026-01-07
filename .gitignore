@@ -6,3 +6,5 @@
 作成者用_untouchable/venv/
 作成者用_untouchable/certs/cert.pem
 作成者用_untouchable/certs/key.pem
+__pycache__/
+*.pyc
