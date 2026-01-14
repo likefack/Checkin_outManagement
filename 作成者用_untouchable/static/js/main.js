@@ -356,6 +356,7 @@ function onGradeChange() {
         populateSelect(dom.classSelect, classes);
         dom.classSelect.disabled = false;
     }
+    focusQrInput();
 }
 function onClassChange() {
     const selectedGrade = dom.gradeSelect.value;
@@ -369,6 +370,7 @@ function onClassChange() {
         populateSelect(dom.numberSelect, numbers);
         dom.numberSelect.disabled = false;
     }
+    focusQrInput();
 }
 function onNumberChange() {
     clearStudentInfo();
@@ -383,11 +385,13 @@ function onNumberChange() {
             dom.seatSelectorItem.style.display = 'block';
         }
     }
+    focusQrInput();
 }
 function onSeatChange() {
     const selectedSeat = dom.seatSelect.value;
     if (selectedSeat) renderActionButton('enter');
     else dom.actionButtonContainer.innerHTML = '';
+    focusQrInput();
 }
 function renderActionButton(type) {
     dom.actionButtonContainer.innerHTML = '';
