@@ -128,7 +128,9 @@ th.sorted-desc::after {
     background-color: rgba(0,0,0,0.5);
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-start; /* 修正: 下にスペースを確保するため上寄せに変更 */
+    padding-top: 80px; /* 修正: 上部に余白を追加して位置を調整 */
+    overflow-y: auto; /* 修正: 画面が小さい場合にスクロールできるようにする */
     z-index: 2000;
 }
 .modal-content {

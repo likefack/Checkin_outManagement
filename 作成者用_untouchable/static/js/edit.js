@@ -42,6 +42,7 @@ const dom = {
     modalClassSelect: document.getElementById('modal-class-select'),
     modalNumberSelect: document.getElementById('modal-number-select'),
     modalStudentName: document.getElementById('modal-student-name'),
+    editSeatNumber: document.getElementById('edit-seat-number'),
     editEntryTime: document.getElementById('edit-entry-time'),
     editExitTime: document.getElementById('edit-exit-time'),
     modalCancelBtn: document.getElementById('modal-cancel-btn'),
@@ -67,6 +68,9 @@ async function initializeEditPage() {
     entryTimePicker = flatpickr(dom.editEntryTime, flatpickrOptions);
     exitTimePicker = flatpickr(dom.editExitTime, flatpickrOptions);
     
+    // 座席選択肢の生成
+    populateEditSeatSelect();
+
     await fetchLogs();
 }
 
@@ -150,6 +154,8 @@ function renderTable(logs) {
             durationText = `${hours}時間 ${minutes}分`;
         }
         const row = dom.logsTableBody.insertRow();
+        // 座席番号がない場合は 'QR' と表示
+        const seatDisplay = log.seat_number ? log.seat_number : 'QR';
         row.innerHTML = `
             <td>${log.id}</td>
             <td>${entryDate ? entryDate.toLocaleDateString('ja-JP') : ''}</td>
@@ -157,6 +163,7 @@ function renderTable(logs) {
             <td>${log.class || ''}</td>
             <td>${log.student_number || ''}</td>
             <td>${log.name || ''}</td>
+            <td>${seatDisplay}</td>
             <td>${entryDate ? entryDate.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : ''}</td>
             <td>${exitDate ? exitDate.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : '（未退室）'}</td>
             <td>${durationText}</td>
@@ -248,6 +255,9 @@ async function openModal(log = null) {
         await onModalClassChange();
         dom.modalNumberSelect.value = log.student_number;
         await onModalNumberChange();
+        
+        // 座席番号をセット
+        dom.editSeatNumber.value = log.seat_number || '';
 
         // 記録済みの入室時刻をセット（なければ現在時刻）
         const entryDate = log.entry_time ? new Date(log.entry_time) : new Date();
@@ -263,11 +273,11 @@ async function openModal(log = null) {
         dom.modalGradeSelect.value = '';
         onModalGradeChange();
 
-        // 新規追加時は日付をクリアする（空欄にする）
+        // 座席番号と日付をクリアする
+        dom.editSeatNumber.value = '';
         entryTimePicker.clear();
         exitTimePicker.clear();
     }
-    // ▲▲▲ ここまで修正 ▲▲▲
     
     dom.modal.style.display = 'flex';
 }
@@ -306,7 +316,8 @@ async function handleFormSubmit(event) {
     const logData = {
         system_id: student.system_id,
         entry_time: entryTimeVal,
-        exit_time: exitTimeVal
+        exit_time: exitTimeVal,
+        seat_number: dom.editSeatNumber.value || null
     };
     
     const url = logId ? `/api/logs/${logId}` : '/api/logs';
@@ -405,5 +416,37 @@ function populateFilterSelects(students) {
     grades.forEach(g => dom.filterGrade.add(new Option(GRADE_MAP[g] || g, g)));
     classes.forEach(c => dom.filterClass.add(new Option(c, c)));
     numbers.forEach(n => dom.filterNumber.add(new Option(n, n)));
+}
+
+/**
+ * 編集モーダルの座席選択肢を生成する
+ * main.jsと同様の選択肢を提供する
+ */
+function populateEditSeatSelect() {
+    const select = dom.editSeatNumber;
+    select.innerHTML = ''; // クリア
+
+    // 未指定（QR）用のオプション
+    const defaultOption = document.createElement('option');
+    defaultOption.value = "";
+    defaultOption.textContent = "QR";
+    select.appendChild(defaultOption);
+
+    // 臨時教室など
+    const extraRooms = ['座席なし', '223教室', '224教室', '225教室'];
+    extraRooms.forEach(room => {
+        const option = document.createElement('option');
+        option.value = room;
+        option.textContent = room;
+        select.appendChild(option);
+    });
+
+    // 座席番号 1〜72
+    for (let i = 1; i <= 72; i++) {
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = i;
+        select.appendChild(option);
+    }
 }
 

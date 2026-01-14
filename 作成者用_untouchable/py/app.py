@@ -509,7 +509,7 @@ def get_logs():
 
     total = conn.execute(count_query, params).fetchone()[0]
     
-    valid_sort_columns = ['id', 'entry_time', 'grade', 'class', 'student_number', 'name', 'exit_time']
+    valid_sort_columns = ['id', 'entry_time', 'grade', 'class', 'student_number', 'name', 'exit_time', 'seat_number']
     if sort_by in valid_sort_columns and sort_dir in ['asc', 'desc']:
         sort_column = f"s.{sort_by}" if sort_by in ['grade', 'class', 'student_number', 'name'] else f"al.{sort_by}"
         query += f" ORDER BY {sort_column} {sort_dir.upper()}"
@@ -517,6 +517,8 @@ def get_logs():
     offset = (page - 1) * per_page
     query += f" LIMIT {per_page} OFFSET {offset}"
 
+    # クエリに al.seat_number を追加
+    query = query.replace("al.entry_time, al.exit_time", "al.entry_time, al.exit_time, al.seat_number")
     logs = [dict(row) for row in conn.execute(query, params).fetchall()]
     conn.close()
     
@@ -525,13 +527,13 @@ def get_logs():
 @app.route('/api/logs', methods=['POST'])
 def add_log():
     data = request.json
-    system_id, entry_time, exit_time = data.get('system_id'), data.get('entry_time'), data.get('exit_time')
+    system_id, entry_time, exit_time, seat_number = data.get('system_id'), data.get('entry_time'), data.get('exit_time'), data.get('seat_number')
     if not system_id or not entry_time: return jsonify({'status': 'error', 'message': '生徒IDと入室時刻は必須です。'}), 400
     entry_time_utc, exit_time_utc = convert_to_utc(entry_time), convert_to_utc(exit_time)
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute('INSERT INTO attendance_logs (system_id, entry_time, exit_time) VALUES (?, ?, ?)', (system_id, entry_time_utc, exit_time_utc))
+        cursor.execute('INSERT INTO attendance_logs (system_id, entry_time, exit_time, seat_number) VALUES (?, ?, ?, ?)', (system_id, entry_time_utc, exit_time_utc, seat_number))
         new_log_id = cursor.lastrowid # 作成されたログのIDを取得
 
         is_today = datetime.datetime.fromisoformat(entry_time_utc).astimezone(JST).date() == datetime.datetime.now(JST).date()
@@ -549,7 +551,7 @@ def add_log():
 @app.route('/api/logs/<int:log_id>', methods=['PUT'])
 def update_log(log_id):
     data = request.json
-    system_id, entry_time, exit_time = data.get('system_id'), data.get('entry_time'), data.get('exit_time')
+    system_id, entry_time, exit_time, seat_number = data.get('system_id'), data.get('entry_time'), data.get('exit_time'), data.get('seat_number')
     if not system_id or not entry_time: return jsonify({'status': 'error', 'message': '生徒IDと入室時刻は必須です。'}), 400
     entry_time_utc, exit_time_utc = convert_to_utc(entry_time), convert_to_utc(exit_time)
     conn = get_db_connection()
@@ -561,7 +563,7 @@ def update_log(log_id):
         conn.execute('UPDATE students SET is_present = 0, current_log_id = NULL WHERE current_log_id = ?', (log_id,))
 
         # --- 2. ログ記録を更新 ---
-        conn.execute('UPDATE attendance_logs SET system_id = ?, entry_time = ?, exit_time = ? WHERE id = ?', (system_id, entry_time_utc, exit_time_utc, log_id))
+        conn.execute('UPDATE attendance_logs SET system_id = ?, entry_time = ?, exit_time = ?, seat_number = ? WHERE id = ?', (system_id, entry_time_utc, exit_time_utc, seat_number, log_id))
 
         # --- 3. 新しいステータスを条件付きで設定 ---
         # 更新後の入室日が今日であるかを確認
