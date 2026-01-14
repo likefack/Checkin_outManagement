@@ -51,7 +51,7 @@ def create_tables(conn):
     conn.commit()
     print("データベースのテーブルを定義しました。")
 
-def import_students_from_excel(conn):
+def sync_students_from_excel(conn):
     student_excel_file = get_student_excel_path()
     if not student_excel_file:
         raise FileNotFoundError(f"生徒情報Excelファイルが見つかりません。検索パターン: {STUDENT_EXCEL_PATH_PATTERN}")
@@ -74,8 +74,35 @@ def import_students_from_excel(conn):
     for col in ['system_id', 'enrollment_year', 'grade', 'class', 'student_number']:
          df_students[col] = df_students[col].astype(int)
 
-    df_students.to_sql('students', conn, if_exists='append', index=False)
-    print(f"'{os.path.basename(student_excel_file)}' から生徒情報をインポートしました。")
+    print(f"'{os.path.basename(student_excel_file)}' との同期を開始します...")
+    cursor = conn.cursor()
+    updated_count = 0
+    inserted_count = 0
+    
+    # 既存データと比較して UPDATE または INSERT を実行
+    for _, row in df_students.iterrows():
+        s_id = row['system_id']
+        cursor.execute("SELECT system_id FROM students WHERE system_id = ?", (s_id,))
+        exists = cursor.fetchone()
+        
+        if exists:
+            # 既存IDがある場合は情報を更新 (入退室ステータス等は変更しない)
+            cursor.execute('''
+                UPDATE students 
+                SET enrollment_year=?, grade=?, class=?, student_number=?, name=?, guardian_email=?
+                WHERE system_id=?
+            ''', (row['enrollment_year'], row['grade'], row['class'], row['student_number'], row['name'], row['guardian_email'], s_id))
+            updated_count += 1
+        else:
+            # 新規IDの場合は追加
+            cursor.execute('''
+                INSERT INTO students (system_id, enrollment_year, grade, class, student_number, name, guardian_email)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (s_id, row['enrollment_year'], row['grade'], row['class'], row['student_number'], row['name'], row['guardian_email']))
+            inserted_count += 1
+            
+    conn.commit()
+    print(f"生徒情報の同期完了: 更新 {updated_count} 件, 新規 {inserted_count} 件")
 
 
 def import_phrases_from_excel(conn):
@@ -112,25 +139,26 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # 'students'テーブルが存在するかどうかを、データベース自身に問い合わせて確認
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='students'")
-    table_exists = cursor.fetchone()
-    
-    # もしテーブルが存在しなければ、初期化処理（テーブル作成とデータインポート）を実行
-    if not table_exists:
-        print("studentsテーブルが見つからないため、初期化を開始します...")
-        try:
-            create_tables(conn)
-            import_students_from_excel(conn)
+    try:
+        # テーブル作成（IF NOT EXISTS なので毎回実行しても安全）
+        create_tables(conn)
+        
+        # 生徒情報の同期（毎回起動時にExcelと同期を行う）
+        # 新しい関数 sync_students_from_excel を使用
+        sync_students_from_excel(conn)
+        
+        # フレーズテーブルの確認（データが空の場合のみインポート）
+        cursor.execute("SELECT COUNT(*) FROM phrases")
+        if cursor.fetchone()[0] == 0:
             import_phrases_from_excel(conn)
-            print("データベースの初期化が完了しました。")
-        except Exception as e:
-            print(f"!!! データベース初期化中に致命的なエラーが発生しました: {e} !!!")
-            # エラー発生時は接続を閉じ、中途半端なDBファイルを削除する
-            conn.close()
-            if os.path.exists(DB_PATH):
-                os.remove(DB_PATH)
-            raise e
+            
+        print("データベースの初期化・更新処理が完了しました。")
+
+    except Exception as e:
+        print(f"!!! データベース処理中にエラーが発生しました: {e} !!!")
+        # 既存DBへの影響を考慮し、ここではDB削除を行わずエラーを通知するのみとする
+        conn.close()
+        raise e
             
     # 正常に処理が終わったら接続を閉じる
     conn.close()
