@@ -225,20 +225,32 @@ function initiateExitProcess(button) {
     const row = button.closest('tr');
     const durationCell = row.querySelector('td[data-entry-time]');
     durationCell.dataset.exitTime = pressedAt; 
-    button.textContent = '元に戻す';
+    
+    // カウントダウン初期化
+    let timeLeft = 5;
+    button.textContent = `取消 (${timeLeft}s)`;
     button.classList.remove('exit-list-btn');
     button.classList.add('undo-btn');
-    const timerId = setTimeout(() => {
-        finalizeExit(logId, systemId, pressedAt);
-        delete exitTimers[logId];
-    }, 5000);
+
+    // 1秒ごとにカウントダウン、0になったら退室確定
+    const timerId = setInterval(() => {
+        timeLeft--;
+        if (timeLeft > 0) {
+            button.textContent = `取消 (${timeLeft}s)`;
+        } else {
+            clearInterval(exitTimers[logId]);
+            delete exitTimers[logId];
+            finalizeExit(logId, systemId, pressedAt);
+        }
+    }, 1000);
+    
     exitTimers[logId] = timerId;
 }
 
 function cancelExitProcess(button) {
     const logId = button.dataset.logId;
     if (exitTimers[logId]) {
-        clearTimeout(exitTimers[logId]);
+        clearInterval(exitTimers[logId]); // setTimeoutから変更したため
         delete exitTimers[logId];
         const row = button.closest('tr');
         const durationCell = row.querySelector('td[data-entry-time]');
