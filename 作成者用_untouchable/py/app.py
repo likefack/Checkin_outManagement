@@ -158,7 +158,7 @@ def get_initial_data():
             # フロントエンドに返す is_present を設定
             student['is_present'] = is_present_today_for_frontend
 
-            # ネスト構造に格納 (ここは変更なし)
+            # ネスト構造に格納 
             grade, class_num, number = student['grade'], student['class'], student['student_number']
             if grade not in students_data_nested: students_data_nested[grade] = {}
             if class_num not in students_data_nested[grade]: students_data_nested[grade][class_num] = {}
@@ -172,7 +172,7 @@ def get_initial_data():
             conn.commit()
             print(f"リセット対象 {len(ids_to_reset)} 件のステータスをDBでリセットしました。")
 
-        # 今日の入退室記録を取得 (ここは変更なし)
+        # 今日の入退室記録を取得
         attendees_cursor = conn.execute('SELECT al.id AS log_id, s.system_id, al.seat_number, al.entry_time, al.exit_time, s.name, s.grade, s.class, s.student_number FROM attendance_logs al JOIN students s ON al.system_id = s.system_id WHERE al.entry_time >= ? ORDER BY al.entry_time ASC', (start_of_day_utc.isoformat(),))
         current_attendees = [dict(row) for row in attendees_cursor.fetchall()]
 
@@ -233,7 +233,6 @@ def check_in():
         # 実績判定処理を呼び出す
         ach_result = _handle_notifications(conn, system_id, 'check_in', new_log_id)
         
-        # ▼▼▼ 変更ここから ▼▼▼
         # 最終的に通知に使うランクを決定する。
         # もし実績（ach_result）の中に新しいランク情報があればそれを優先し、
         # なければ最初にDBから読み込んだランク情報を使う。
@@ -243,7 +242,6 @@ def check_in():
 
         # `rank`キーに、上で決定した最新のランク情報(final_rank)を渡す
         return jsonify({'status': 'success', 'message': f'{student["name"]}さんが入室しました。', 'rank': final_rank, 'achievement': ach_result})
-        # ▲▲▲ 変更ここまで ▲▲▲
 
     except Exception as e:
         conn.rollback(); return jsonify({'status': 'error', 'message': f'データベースエラー: {e}'}), 500
@@ -275,7 +273,6 @@ def check_out():
         # 実績判定処理を呼び出す
         ach_result = _handle_notifications(conn, system_id, 'check_out', log_id_to_update)
         
-        # ▼▼▼ 変更ここから ▼▼▼
         # 最終的に通知に使うランクを決定する
         final_rank = ach_result.get('rank') if ach_result and ach_result.get('rank') else student['title']
         
@@ -283,7 +280,6 @@ def check_out():
 
         # `rank`キーに、最新のランク情報(final_rank)を渡す
         return jsonify({'status': 'success', 'message': f'{student["name"]}さんが退室しました。', 'rank': final_rank, 'achievement': ach_result})
-        # ▲▲▲ 変更ここまで ▲▲▲
 
     except Exception as e:
         conn.rollback(); return jsonify({'status': 'error', 'message': f'データベースエラー: {e}'}), 500
@@ -348,7 +344,7 @@ def qr_process():
             message = f'{student["name"]}さんが自習室に入室しました。'
             ach_result = _handle_notifications(conn, system_id, 'check_in', new_log_id)
 
-        # 最新の称号情報を決定（変更なし）
+        # 最新の称号情報を決定
         # student変数はリセット時に再取得しないため、必要ならここで再取得
         current_student_state = conn.execute('SELECT title FROM students WHERE system_id = ?', (system_id,)).fetchone()
         current_title = current_student_state['title'] if current_student_state else None

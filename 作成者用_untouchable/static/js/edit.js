@@ -54,7 +54,6 @@ const dom = {
  */
 async function initializeEditPage() {
     setupEventListeners();
-   // フィルター用は変更なし
     flatpickr(dom.filterPeriod, { mode: "range", dateFormat: "Y-m-d", locale: "ja" });
 
     // モーダル内の日時入力欄にflatpickrを適用
@@ -337,7 +336,6 @@ async function handleFormSubmit(event) {
     } catch (error) {
         alert("保存中にエラーが発生しました。");
     }
-    // ▲▲▲ 変更ここまで ▲▲▲
 }
 
 // 古いformatDateForInput関数は不要になったので、全体を新しいヘルパー関数に差し替える
@@ -356,7 +354,6 @@ function formatDateForServer(date) {
     const s = String(date.getSeconds()).padStart(2, '0');
     return `${y}-${m}-${d} ${h}:${i}:${s}`;
 }
-// ▲▲▲ 変更ここまで ▲▲▲
 // --- 生徒選択・ドロップダウン関連のヘルパー関数群 ---
 function buildNestedStudentsData() {
     studentsDataNested = {};

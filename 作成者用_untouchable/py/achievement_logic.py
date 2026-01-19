@@ -6,7 +6,7 @@ import pytz
 JST = pytz.timezone('Asia/Tokyo')
 UTC = pytz.utc
 
-# (アチーブメントメッセージの定義は変更なし)
+# --- アチーブメントメッセージ定義 ---
 ACHIEVEMENT_MESSAGES = {
     'monthly_rank_1': {'student': "あなたは先月の首席利用者に選ばれました！！！", 'guardian': "{name}さんが、先月の自習室利用時間において全校生徒の中で1位となられましたことをお知らせします。", 'title': "首席利用者"},
     'monthly_rank_2': {'student': "あなたは先月の次席利用者に選ばれました！！", 'guardian': "{name}さんが、先月の自習室利用時間において全校生徒の中で2位となられましたことをお知らせします。", 'title': "次席利用者"},

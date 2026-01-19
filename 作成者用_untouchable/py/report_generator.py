@@ -86,7 +86,7 @@ def create_report(db_path, start_date_str, end_date_str):
             df_for_sheet0 = df.drop_duplicates(subset=['date', 'system_id'], keep='first')
             df_copy_paste = df_for_sheet0.copy() # フィルター後のデータを使用
 
-            # ★ 1. (仕様変更) IDを 'ID_23C0115' 形式に生成
+            # 1. (仕様変更) IDを 'ID_23C0115' 形式に生成
             # system_idを文字列に変換（7桁ゼロ埋め）
             df_copy_paste['system_id_str'] = df_copy_paste['system_id'].astype(str).str.zfill(7)
             # 学年(数値)をアルファベット(A-F)に変換
@@ -125,7 +125,7 @@ def create_report(db_path, start_date_str, end_date_str):
                 # '中高' # 削除
             ]]
 
-            # 6. Excelに出力する際の列名（ヘッダー）を変更 (★ '中高'を削除)
+            # 6. Excelに出力する際の列名（ヘッダー）を変更 
             df_final_copy_paste.columns = [
                 'ID',
                 '学年',
@@ -171,7 +171,7 @@ def create_report(db_path, start_date_str, end_date_str):
             # 2. 上記の「日ごとユニーク」データを使ってクロス集計（=延べ人数をカウント）
             df_summary_class = pd.crosstab(df_daily_unique_users['grade_jp'], df_daily_unique_users['class'])
             
-            # 3. 欠損している学年・組を0埋めして合計を計算（ここは変更なし）
+            # 3. 欠損している学年・組を0埋めして合計を計算
             df_summary_class = df_summary_class.reindex(index=all_grades_jp, columns=all_classes, fill_value=0)
             df_summary_class['合計'] = df_summary_class.sum(axis=1)
             df_summary_class.loc['合計'] = df_summary_class.sum()

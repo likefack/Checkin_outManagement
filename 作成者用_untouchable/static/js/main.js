@@ -137,12 +137,11 @@ function setupEventListeners() {
 async function processApiResponse(response) {
     const result = await response.json();
 
-    // ▼▼▼ 変更点: APIレスポンスに含まれる`rank`情報を`showToast`関数に渡す ▼▼▼
+    //APIレスポンスに含まれる`rank`情報を`showToast`関数に渡す
     // これにより、入退室の基本メッセージにも常に称号の色が適用される
     showToast(result.message, result.rank);
     
     if (response.ok) {
-        // アチーブメントメッセージの処理は変更なし (こちらも正しく色がつきます)
         if (result.achievement && result.achievement.student_message) {
             setTimeout(() => {
                 // 補足: achievementの中のrankではなく、result直下の最新のrankを渡すように統一します
@@ -250,7 +249,7 @@ function initiateExitProcess(button) {
 function cancelExitProcess(button) {
     const logId = button.dataset.logId;
     if (exitTimers[logId]) {
-        clearInterval(exitTimers[logId]); // setTimeoutから変更したため
+        clearInterval(exitTimers[logId]); 
         delete exitTimers[logId];
         const row = button.closest('tr');
         const durationCell = row.querySelector('td[data-entry-time]');

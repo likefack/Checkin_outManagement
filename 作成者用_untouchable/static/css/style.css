@@ -78,9 +78,8 @@ h2 {
     margin-bottom: 10px; 
 }
 
-.selector-item {
-    /* flexコンテナである必要はなくなったので削除 */
-}
+/* .selector-item: flexコンテナである必要はなくなったので削除 */
+
 .selector-item label {
     display: block; /* ラベルをブロック要素にして、必ず改行させる */
     font-size: 0.8em;
