@@ -258,7 +258,7 @@ def create_report(db_path, start_date_str, end_date_str):
             # 曜日ごとの集計結果をメインのサマリーに結合
             df_user_summary = pd.merge(df_user_summary, dow_counts, on='system_id', how='left')
             
-            # [修正] 結合によって発生したNaN(欠損値)を0で埋め、データ型を整数に変換する
+            #結合によって発生したNaN(欠損値)を0で埋め、データ型を整数に変換する
             df_user_summary[dow_order] = df_user_summary[dow_order].fillna(0).astype(int)
             # 結合後に不要になったsystem_id列を削除
             df_user_summary.drop(columns=['system_id'], inplace=True)

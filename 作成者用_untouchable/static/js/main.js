@@ -108,7 +108,7 @@ function setupEventListeners() {
     dom.attendanceTableBody.addEventListener('click', handleTableClick);
 
     if (APP_MODE === 'admin') {
-        // 修正: 意図的に他の入力要素へフォーカスした場合は、QR入力欄への強制フォーカス戻しを行わない
+        //意図的に他の入力要素へフォーカスした場合は、QR入力欄への強制フォーカス戻しを行わない
         dom.qrInput.addEventListener('blur', (e) => {
             const newTarget = e.relatedTarget;
             // フォーカス移動先がセレクトボックス、入力、ボタン、またはカレンダー等の場合は何もしない

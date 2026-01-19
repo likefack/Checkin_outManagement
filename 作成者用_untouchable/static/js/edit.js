@@ -245,7 +245,6 @@ async function openModal(log = null) {
     dom.editForm.reset();
     populateModalGradeSelect(); 
     
-    // ▼▼▼ ここから修正 ▼▼▼
     if (log) { // 編集の場合
         dom.modalTitle.textContent = "記録の編集";
         dom.editLogId.value = log.id;

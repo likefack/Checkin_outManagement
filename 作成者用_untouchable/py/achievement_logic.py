@@ -91,7 +91,6 @@ def _check_monthly_ranking(conn, system_id):
     return None
 
 def _check_consecutive_days(conn, system_id):
-    # ★★★ 連続利用日数の判定ロジックを全面的に修正 ★★★
     open_days_rows = conn.execute("SELECT DISTINCT strftime('%Y-%m-%d', entry_time, 'localtime') as open_day FROM attendance_logs ORDER BY open_day DESC").fetchall()
     open_days = [datetime.strptime(row['open_day'], '%Y-%m-%d').date() for row in open_days_rows]
     if not open_days: return None

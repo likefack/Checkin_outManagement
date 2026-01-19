@@ -27,12 +27,10 @@ body {
     padding: 20px;
 }
 
-/* ★★★ 修正箇所 ★★★ */
 .filter-section, .log-list-section {
     border: none !important; /* 意図しないボーダーを強制的に削除 */
     box-shadow: 0 1px 3px rgba(0,0,0,0.08); /* cardスタイルを再適用 */
 }
-/* ★★★ 修正ここまで ★★★ */
 
 .filter-section {
     display: flex;
@@ -128,9 +126,9 @@ th.sorted-desc::after {
     background-color: rgba(0,0,0,0.5);
     display: flex;
     justify-content: center;
-    align-items: flex-start; /* 修正: 下にスペースを確保するため上寄せに変更 */
-    padding-top: 80px; /* 修正: 上部に余白を追加して位置を調整 */
-    overflow-y: auto; /* 修正: 画面が小さい場合にスクロールできるようにする */
+    align-items: flex-start; /*下にスペースを確保するため上寄せに変更 */
+    padding-top: 80px; /*上部に余白を追加して位置を調整 */
+    overflow-y: auto; /*画面が小さい場合にスクロールできるようにする */
     z-index: 2000;
 }
 .modal-content {

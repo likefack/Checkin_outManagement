@@ -71,6 +71,8 @@ def _handle_notifications(conn, system_id, event_type, log_id):
         if msg:
             guardian_message = msg
 
+    # 自動配信のフッターテキスト
+    footer_text = "\n\n※このメールはシステムより自動配信されています。"
     if event_type == 'check_in':
         entry_time_jst = parse_db_time_to_jst(log_entry['entry_time'])
         subject = f"【{app_name}】{student['name']}さんの入室通知"
@@ -78,7 +80,7 @@ def _handle_notifications(conn, system_id, event_type, log_id):
         # メッセージがある場合のみ改行を含めて設定
         extra_msg = f"\n{guardian_message}" if guardian_message else ""
 
-        body = f"{student['name']}さんの保護者様\n\nお世話になっております、{org_name}の{sender_name}です。\n\n{student['name']}さんが{entry_time_jst.strftime('%H時%M分')}に入室されたことをお知らせします。{extra_msg}\n\n今後ともよろしくお願いいたします。\n{sender_name}"
+        body = f"{student['name']}さんの保護者様\n\nお世話になっております、{org_name}の{sender_name}です。\n\n{student['name']}さんが{entry_time_jst.strftime('%H時%M分')}に入室されたことをお知らせします。{extra_msg}\n\n今後ともよろしくお願いいたします。\n{sender_name}{footer_text}"
         send_email_async(student['guardian_email'], subject, body)
     elif event_type == 'check_out':
         entry_time_jst = parse_db_time_to_jst(log_entry['entry_time'])
@@ -98,7 +100,7 @@ def _handle_notifications(conn, system_id, event_type, log_id):
         extra_info = "\n".join(infos)
         if extra_info: extra_info = f"\n{extra_info}"
 
-        body = f"{student['name']}の保護者様\n\nお世話になっております、{org_name}の{sender_name}です。\n\n{student['name']}さんが{exit_time_jst.strftime('%H時%M分')}に退室されたことをお知らせします。{extra_info}\n\n今後ともよろしくお願いいたします。\n{sender_name}"
+        body = f"{student['name']}の保護者様\n\nお世話になっております、{org_name}の{sender_name}です。\n\n{student['name']}さんが{exit_time_jst.strftime('%H時%M分')}に退室されたことをお知らせします。{extra_info}\n\n今後ともよろしくお願いいたします。\n{sender_name}{footer_text}"
         send_email_async(student['guardian_email'], subject, body)
     return ach_result
 
@@ -131,7 +133,7 @@ def get_initial_data():
         all_students_list = students_cursor.fetchall() # 一度リストとして取得
 
         students_data_nested = {}
-        # ▼▼▼ 修正点: is_present の状態を日付でチェックして上書き ▼▼▼
+        #is_present の状態を日付でチェックして上書き 
         ids_to_reset = [] # DBリセット対象のsystem_idリスト
         for student_row in all_students_list:
             student = dict(student_row) # Rowオブジェクトを辞書に変換
@@ -162,7 +164,7 @@ def get_initial_data():
             if class_num not in students_data_nested[grade]: students_data_nested[grade][class_num] = {}
             students_data_nested[grade][class_num][number] = student
 
-        # ▼▼▼ 修正点: リセット対象の生徒のDBステータスを更新 ▼▼▼
+        #リセット対象の生徒のDBステータスを更新
         if ids_to_reset:
             # プレースホルダーを使って安全にUPDATE文を実行
             placeholders = ','.join('?' * len(ids_to_reset))
@@ -196,13 +198,13 @@ def check_in():
 
     conn = get_db_connection()
     try:
-        # ▼▼▼ 修正点1: まず現在の生徒情報を取得 ▼▼▼
+        #まず現在の生徒情報を取得 
         student = conn.execute('SELECT is_present, name, title, current_log_id FROM students WHERE system_id = ?', (system_id,)).fetchone()
         if not student:
              return jsonify({'status': 'error', 'message': '該当する生徒が見つかりません。'}), 404 # 生徒が見つからない場合のエラーを追加
 
         is_present_today = False
-        # ▼▼▼ 修正点2: is_present が True の場合、それが今日の記録か確認 ▼▼▼
+        #is_present が True の場合、それが今日の記録か確認 
         if student['is_present'] and student['current_log_id']:
             log_entry = conn.execute('SELECT entry_time FROM attendance_logs WHERE id = ?', (student['current_log_id'],)).fetchone()
             if log_entry:
@@ -216,7 +218,7 @@ def check_in():
                     print(f"ID:{system_id} のステータスをリセットしました。")
                     # student 変数はここでは再取得不要（入室処理に進むため）
 
-        # ▼▼▼ 修正点3: 今日の記録があるかで分岐 ▼▼▼
+        #今日の記録があるかで分岐 
         if is_present_today:
             # 既に今日入室済みの場合 (手動入室ではエラーとする)
             conn.close() # エラーを返す前にコネクションを閉じる
@@ -299,12 +301,12 @@ def qr_process():
     if not system_id: return jsonify({'status': 'error', 'message': 'IDがありません。'}), 400
     conn = get_db_connection()
     try:
-        # ▼▼▼ 修正点1: まず生徒情報を取得 ▼▼▼
+        #まず生徒情報を取得
         student = conn.execute('SELECT is_present, name, title, current_log_id FROM students WHERE system_id = ?', (system_id,)).fetchone()
         if not student: return jsonify({'status': 'error', 'message': '該当する生徒が見つかりません。'}), 404
 
         is_present_today = False
-        # ▼▼▼ 修正点2: is_present が True の場合、それが今日の記録か確認 ▼▼▼
+        #is_present が True の場合、それが今日の記録か確認
         if student['is_present'] and student['current_log_id']:
             log_entry = conn.execute('SELECT entry_time FROM attendance_logs WHERE id = ?', (student['current_log_id'],)).fetchone()
             if log_entry:
@@ -320,7 +322,7 @@ def qr_process():
                     # is_present_today は False のまま（=入室処理へ）
 
         message, ach_result = "", None
-        # ▼▼▼ 修正点3: 「今日」入室しているかどうかで分岐 ▼▼▼
+        #「今日」入室しているかどうかで分岐
         if is_present_today:
             # --- 退室処理 ---
             exit_time_utc = datetime.datetime.now(UTC)
@@ -365,7 +367,7 @@ def qr_process():
         if conn:
             conn.close()
 
-# ★★★ 修正: `exit_all`関数を新しい仕様に合わせて修正 ★★★
+#`exit_all`関数を新しい仕様に合わせて修正 
 @app.route('/api/exit_all', methods=['POST'])
 def exit_all():
     conn = get_db_connection()
