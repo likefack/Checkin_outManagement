@@ -74,7 +74,11 @@ def _handle_notifications(conn, system_id, event_type, log_id):
     if event_type == 'check_in':
         entry_time_jst = parse_db_time_to_jst(log_entry['entry_time'])
         subject = f"【{app_name}】{student['name']}さんの入室通知"
-        body = f"{student['name']}さんの保護者様\n\nお世話になっております、{org_name}の{sender_name}です。\n\n{student['name']}さんが{entry_time_jst.strftime('%H時%M分')}に入室されたことをお知らせします。\n{guardian_message}\n\n今後ともよろしくお願いいたします。\n{sender_name}"
+        
+        # メッセージがある場合のみ改行を含めて設定
+        extra_msg = f"\n{guardian_message}" if guardian_message else ""
+
+        body = f"{student['name']}さんの保護者様\n\nお世話になっております、{org_name}の{sender_name}です。\n\n{student['name']}さんが{entry_time_jst.strftime('%H時%M分')}に入室されたことをお知らせします。{extra_msg}\n\n今後ともよろしくお願いいたします。\n{sender_name}"
         send_email_async(student['guardian_email'], subject, body)
     elif event_type == 'check_out':
         entry_time_jst = parse_db_time_to_jst(log_entry['entry_time'])
@@ -86,7 +90,15 @@ def _handle_notifications(conn, system_id, event_type, log_id):
             stay_minutes = remainder // 60
             stay_text = f"滞在時間: {int(stay_hours)}時間{int(stay_minutes)}分"
         subject = f"【{app_name}】{student['name']}さんの退室通知"
-        body = f"{student['name']}の保護者様\n\nお世話になっております、{org_name}の{sender_name}です。\n\n{student['name']}さんが{exit_time_jst.strftime('%H時%M分')}に退室されたことをお知らせします。\n{stay_text}\n{guardian_message}\n\n今後ともよろしくお願いいたします。\n{sender_name}"
+
+        # 滞在時間とメッセージをリスト化し、存在するものだけを結合
+        infos = []
+        if stay_text: infos.append(stay_text)
+        if guardian_message: infos.append(guardian_message)
+        extra_info = "\n".join(infos)
+        if extra_info: extra_info = f"\n{extra_info}"
+
+        body = f"{student['name']}の保護者様\n\nお世話になっております、{org_name}の{sender_name}です。\n\n{student['name']}さんが{exit_time_jst.strftime('%H時%M分')}に退室されたことをお知らせします。{extra_info}\n\n今後ともよろしくお願いいたします。\n{sender_name}"
         send_email_async(student['guardian_email'], subject, body)
     return ach_result
 
