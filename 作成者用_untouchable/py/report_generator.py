@@ -292,6 +292,50 @@ def create_report(db_path, start_date_str, end_date_str):
             hourly_pivot.index.name = '時間帯'
             hourly_pivot.to_excel(writer, sheet_name='総入室回数時間帯別サマリー')
 
+            # --- シート6: 時間帯別在室人数カウンタ ---
+            # 各滞在がカバーする時間帯（日時）のリストを生成
+            def get_hour_timestamps(row):
+                start = row['entry_time'].floor('H')
+                # 退室時間がジャスト(例: 10:00:00)の場合は、その時間帯(10時台)には在室していないとみなすため1秒引く
+                end = (row['exit_time'] - pd.Timedelta(seconds=1)).floor('H')
+                # startからendまでの1時間ごとの「日時そのもの」を取得（日付情報を保持するため）
+                return pd.date_range(start, end, freq='H').tolist()
+
+            # データフレームに各利用者の在室時間帯（日時）リストを追加
+            df_occupancy = df[['grade_jp', 'system_id']].copy()
+            df_occupancy['timestamps'] = df.apply(get_hour_timestamps, axis=1)
+            
+            # リストを行に展開（1人の滞在を複数の時間帯行に分割）
+            df_exploded = df_occupancy.explode('timestamps')
+            df_exploded = df_exploded.dropna(subset=['timestamps'])
+
+            # 日付と時間を抽出
+            df_exploded['date_val'] = df_exploded['timestamps'].dt.date
+            df_exploded['hour_val'] = df_exploded['timestamps'].dt.hour
+            df_exploded['hour_str'] = df_exploded['hour_val'].astype(str) + '時台'
+
+            #「同じ日」かつ「同じ時間帯」かつ「同じ人」の場合のみ重複として削除する
+            # これにより、「別の日」の「同じ時間帯」の利用は維持される（例: 月曜10時と火曜10時は別カウント）
+            df_exploded = df_exploded.drop_duplicates(subset=['date_val', 'hour_str', 'system_id'])
+            
+            # 時間帯(0-23時) × 学年 でクロス集計（人数カウント）
+            # ここで集計されるのは「期間中の全日程における、その時間帯の在室人数の延べ合計」となる
+            occupancy_pivot = pd.crosstab(df_exploded['hour_str'], df_exploded['grade_jp'])
+            
+            # 全時間帯・全学年の枠を確保して埋める
+            occupancy_pivot = occupancy_pivot.reindex(index=all_hours_jp, columns=all_grades_jp, fill_value=0)
+            
+            # 合計列・行の計算
+            # 横方向（その時間帯の全学年合計）は意味があるため残す
+            occupancy_pivot['合計'] = occupancy_pivot.sum(axis=1)
+            
+            # 縦方向（列の合計）は、時間をまたぐ同一人物が重複加算され、
+            # 「延べ積算人数」のような直感的でない値になるため計算しない
+            # occupancy_pivot.loc['合計'] = occupancy_pivot.sum()
+            
+            occupancy_pivot.index.name = '時間帯'
+            occupancy_pivot.to_excel(writer, sheet_name='時間帯別在室人数カウンタ')
+
         return file_path, f"レポートが正常に作成されました: {os.path.basename(file_path)}"
         
     except Exception as e:
