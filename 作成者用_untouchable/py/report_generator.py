@@ -283,16 +283,16 @@ def create_report(db_path, start_date_str, end_date_str):
             
             df_user_summary.to_excel(writer, sheet_name='利用者別サマリー', index=False)
             
-            # --- シート5: 総入室回数時間帯別サマリー ---
+            # --- シート5: 時間帯別総入室回数サマリー ---
             hourly_pivot = pd.crosstab(df['entry_hour_jp'], df['grade_jp']).reindex(columns=all_grades_jp, fill_value=0)
             all_hours_jp = [f"{h}時台" for h in range(24)]
             hourly_pivot = hourly_pivot.reindex(index=all_hours_jp, fill_value=0)
             hourly_pivot['合計'] = hourly_pivot.sum(axis=1)
             hourly_pivot.loc['合計'] = hourly_pivot.sum()
             hourly_pivot.index.name = '時間帯'
-            hourly_pivot.to_excel(writer, sheet_name='総入室回数時間帯別サマリー')
+            hourly_pivot.to_excel(writer, sheet_name='時間帯別総入室回数サマリー')
 
-            # --- シート6: 時間帯別在室人数カウンタ ---
+            # --- シート6: 時間帯別在室人数サマリー ---
             # 各滞在がカバーする時間帯（日時）のリストを生成
             def get_hour_timestamps(row):
                 start = row['entry_time'].floor('H')
@@ -334,7 +334,7 @@ def create_report(db_path, start_date_str, end_date_str):
             # occupancy_pivot.loc['合計'] = occupancy_pivot.sum()
             
             occupancy_pivot.index.name = '時間帯'
-            occupancy_pivot.to_excel(writer, sheet_name='時間帯別在室人数カウンタ')
+            occupancy_pivot.to_excel(writer, sheet_name='時間帯別在室人数サマリー')
 
         return file_path, f"レポートが正常に作成されました: {os.path.basename(file_path)}"
         
