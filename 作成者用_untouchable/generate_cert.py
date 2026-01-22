@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 dotenv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '管理者用_touchable', '.env')
 load_dotenv(dotenv_path)
 
-# ★★★ .envファイルからIPアドレスを取得 ★★★
+#  .envファイルからIPアドレスを取得 
 SERVER_IP = os.getenv("SERVER_IP")
 
 CERT_FILE = "cert.pem"

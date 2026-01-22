@@ -311,7 +311,7 @@ def qr_process():
                 if entry_time_jst and entry_time_jst.date() == datetime.datetime.now(JST).date():
                     is_present_today = True
                 else:
-                    # ★★★ 前日以前の記録なら、ここで強制的にリセット ★★★
+                    #  前日以前の記録なら、ここで強制的にリセット 
                     print(f"ID:{system_id} の前日以前の入室記録を検出(qr_process)。ステータスをリセットします。")
                     conn.execute('UPDATE students SET is_present = 0, current_log_id = NULL WHERE system_id = ?', (system_id,))
                     print(f"ID:{system_id} のステータスをリセットしました。")
@@ -466,41 +466,41 @@ def get_logs():
 
     if filters['start']:
         start_raw = filters['start'] # 元の値を保持
-        # print(f"[デバッグ] 受け取った開始日: {start_raw}") # ★デバッグ出力追加
+        # print(f"[デバッグ] 受け取った開始日: {start_raw}") # デバッグ出力追加
         try:
             start_dt_naive = datetime.datetime.strptime(start_raw, '%Y-%m-%d')
             start_dt_jst = JST.localize(start_dt_naive.replace(hour=0, minute=0, second=0))
             start_utc_iso = start_dt_jst.astimezone(UTC).isoformat()
             conditions.append("al.entry_time >= ?")
             params.append(start_utc_iso)
-            # print(f"[デバッグ] 変換後の開始日(UTC ISO): {start_utc_iso}") # ★デバッグ出力追加
+            # print(f"[デバッグ] 変換後の開始日(UTC ISO): {start_utc_iso}") # デバッグ出力追加
         except ValueError as e:
-            # ★エラー発生時の詳細ログ出力
+            # エラー発生時の詳細ログ出力
             print(f"【エラー】開始日の変換に失敗しました。入力値: '{start_raw}', エラー: {e}")
-            print(traceback.format_exc()) # ★エラーの詳細な発生箇所を出力
+            print(traceback.format_exc()) # エラーの詳細な発生箇所を出力
         except Exception as e:
-            # ★予期せぬエラー発生時のログ出力
+            # 予期せぬエラー発生時のログ出力
             print(f"【予期せぬエラー】開始日の処理中に問題が発生しました。入力値: '{start_raw}', エラー: {e}")
-            print(traceback.format_exc()) # ★エラーの詳細な発生箇所を出力
+            print(traceback.format_exc()) # エラーの詳細な発生箇所を出力
 
     if filters['end']:
         end_raw = filters['end'] # 元の値を保持
-        # print(f"[デバッグ] 受け取った終了日: {end_raw}") # ★デバッグ出力追加
+        # print(f"[デバッグ] 受け取った終了日: {end_raw}") # デバッグ出力追加
         try:
             end_dt_naive = datetime.datetime.strptime(end_raw, '%Y-%m-%d')
             end_dt_jst = JST.localize(end_dt_naive.replace(hour=23, minute=59, second=59, microsecond=999999))
             end_utc_iso = end_dt_jst.astimezone(UTC).isoformat()
             conditions.append("al.entry_time <= ?")
             params.append(end_utc_iso)
-            # print(f"[デバッグ] 変換後の終了日(UTC ISO): {end_utc_iso}") # ★デバッグ出力追加
+            # print(f"[デバッグ] 変換後の終了日(UTC ISO): {end_utc_iso}") # デバッグ出力追加
         except ValueError as e:
-            # ★エラー発生時の詳細ログ出力
+            # エラー発生時の詳細ログ出力
             print(f"【エラー】終了日の変換に失敗しました。入力値: '{end_raw}', エラー: {e}")
-            print(traceback.format_exc()) # ★エラーの詳細な発生箇所を出力
+            print(traceback.format_exc()) # エラーの詳細な発生箇所を出力
         except Exception as e:
-            # ★予期せぬエラー発生時のログ出力
+            # 予期せぬエラー発生時のログ出力
             print(f"【予期せぬエラー】終了日の処理中に問題が発生しました。入力値: '{end_raw}', エラー: {e}")
-            print(traceback.format_exc()) # ★エラーの詳細な発生箇所を出力
+            print(traceback.format_exc()) # エラーの詳細な発生箇所を出力
     if filters['name']:
         conditions.append("s.name LIKE ?"); params.append(f"%{filters['name']}%")
     if filters['grade']:
@@ -514,8 +514,8 @@ def get_logs():
         where_clause = " WHERE " + " AND ".join(conditions)
         query += where_clause
         count_query += where_clause
-        # print(f"[デバッグ] SQL条件: {where_clause}") # ★デバッグ出力追加
-        # print(f"[デバッグ] SQLパラメータ: {params}") # ★デバッグ出力追加
+        # print(f"[デバッグ] SQL条件: {where_clause}") # デバッグ出力追加
+        # print(f"[デバッグ] SQLパラメータ: {params}") # デバッグ出力追加
 
     total = conn.execute(count_query, params).fetchone()[0]
     

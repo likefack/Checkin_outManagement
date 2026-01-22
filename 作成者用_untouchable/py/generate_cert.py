@@ -15,7 +15,7 @@ print(f"DEBUG: .envファイルが存在するか?: {os.path.exists(dotenv_path)
 found = load_dotenv(dotenv_path, verbose=True, override=True)
 print(f"DEBUG: load_dotenv の結果 (読み込めたか?): {found}")
 
-# ★★★ .envファイルからIPアドレスを取得 ★★★
+#  .envファイルからIPアドレスを取得 
 SERVER_IP = os.getenv("SERVER_IP")
 print(f"DEBUG: os.getenv(\"SERVER_IP\") の結果: {SERVER_IP}")
 

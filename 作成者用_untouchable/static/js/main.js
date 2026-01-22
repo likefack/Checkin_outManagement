@@ -516,7 +516,7 @@ function showToast(message, rank = null) {
     const toast = document.createElement('div');
     toast.className = 'toast';
 
-    // ★★★ 称号とCSSクラスをマッピング ★★★
+    //  称号とCSSクラスをマッピング 
     const rankMap = {
         "首席利用者": "gold",
         "次席利用者": "silver",

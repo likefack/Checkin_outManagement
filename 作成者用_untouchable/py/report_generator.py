@@ -109,10 +109,10 @@ def create_report(db_path, start_date_str, end_date_str):
             # 3. その日の何回目の入室かを計算 (ユニーク抽出したため、すべて1になる)
             df_copy_paste['入室回数'] = 1 # groupby処理を削除し、固定で 1 を設定
 
-            # 4. 中高の区分を作成 (★ 削除)
+            # 4. 中高の区分を作成 ( 削除)
             # df_copy_paste['中高'] = df_copy_paste['grade_jp'].str[0] # この行を削除
 
-            # 5. 必要な列を順番通りに選択 (★ ID -> ID_formatted に変更、'中高'を削除)
+            # 5. 必要な列を順番通りに選択 ( ID -> ID_formatted に変更、'中高'を削除)
             df_final_copy_paste = df_copy_paste[[
                 'ID_formatted', # 変更
                 '学年_数値',
