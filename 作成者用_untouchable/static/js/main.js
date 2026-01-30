@@ -122,7 +122,22 @@ function setupEventListeners() {
             }
             focusQrInput();
         });
-        dom.qrInput.addEventListener('keydown', handleQrInput); 
+        // --- 修正: IME確定(compositionend)とEnterキー(keydown)の両方で入力を検知 ---
+        const processInput = (e) => {
+            // IME入力中のEnterキーイベントは無視（compositionendで処理するため）
+            if (e.type === 'keydown' && e.isComposing) return;
+            
+            // IME確定時、またはEnterキーが押された時に処理を実行
+            if (e.type === 'compositionend' || (e.type === 'keydown' && e.key === 'Enter')) {
+                // keydownのEnterならデフォルトのフォーム送信動作等を防ぐ
+                if (e.type === 'keydown') e.preventDefault();
+                handleQrInput(e);
+            }
+        };
+
+        dom.qrInput.addEventListener('keydown', processInput); 
+        dom.qrInput.addEventListener('compositionend', processInput);
+
         dom.exitAllBtn.addEventListener('click', handleExitAll);
         dom.createReportBtn.addEventListener('click', handleCreateReport);
     }
@@ -180,31 +195,36 @@ async function handleManualExit() {
 }
 
 async function handleQrInput(event) {
-    if (event.key === 'Enter') {
-        event.preventDefault(); 
-        const rawId = event.target.value;
-        if (!rawId) return;
-        const normalizedId = normalizeSystemId(rawId);
-        if (!/^\d{7}$/.test(normalizedId)) {
-            showToast("無効なID形式です。");
-            event.target.value = '';
-            return;
-        }
-        event.target.value = ''; 
-        if (normalizedId === lastScannedId) return; 
-        lastScannedId = normalizedId;
-        setTimeout(() => { lastScannedId = null; }, 5000);
-        try {
-            const response = await fetch('/api/qr_process', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ system_id: normalizedId })
-            });
-            await processApiResponse(response);
-        } catch (error) {
-            console.error('QR処理エラー:', error);
-            showToast("エラー: QR処理中に問題が発生しました。");
-        }
+    // イベント種別判定は呼び出し元(processInput)で行うため削除
+
+    // 入力値を取得
+    const rawId = event.target.value;
+    if (!rawId) return; // 空の場合は無視
+
+    const normalizedId = normalizeSystemId(rawId);
+    
+    // 正規化後に7桁の数字になっているかチェック
+    if (!/^\d{7}$/.test(normalizedId)) {
+        // デバッグ用にどのような変換結果になったかも含めて表示(運用開始後は削除しても可)
+        showToast(`無効なID形式です。(認識結果: ${normalizedId || '解析不能'})`);
+        event.target.value = '';
+        return;
+    }
+
+    event.target.value = ''; 
+    if (normalizedId === lastScannedId) return; 
+    lastScannedId = normalizedId;
+    setTimeout(() => { lastScannedId = null; }, 5000);
+    try {
+        const response = await fetch('/api/qr_process', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ system_id: normalizedId })
+        });
+        await processApiResponse(response);
+    } catch (error) {
+        console.error('QR処理エラー:', error);
+        showToast("エラー: QR処理中に問題が発生しました。");
     }
 }
 
@@ -317,8 +337,27 @@ async function handleCreateReport() {
 
 
 function normalizeSystemId(id) {
-    let processedId = id.toUpperCase();
-    if (processedId.startsWith('ID_')) processedId = processedId.substring(3);
+    if (!id) return '';
+    
+    // 1. 全角英数字を半角に変換 (IME入力対策)
+    let processedId = id.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function(s) {
+        return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+    });
+
+    processedId = processedId.toUpperCase();
+
+    // 2. ID抽出 (誤入力対策)
+    // "ID_"があってもなくても、7桁の英数字(0-9, A-F)のパターンを探して抽出する
+    // これにより "tyID_20F0946" のような入力から "20F0946" を取り出す
+    const match = processedId.match(/(?:ID_)?([0-9A-F]{7})/);
+    if (match) {
+        processedId = match[1]; // 抽出された7桁部分
+    } else {
+        // マッチしない場合は空文字を返し、呼び出し元のフォーマットチェックでエラーにする
+        return ''; 
+    }
+
+    // 3. A-F を 1-6 に変換
     const gradeCharMap = { 'A': '1', 'B': '2', 'C': '3', 'D': '4', 'E': '5', 'F': '6' };
     let normalized = '';
     for (const char of processedId) {
