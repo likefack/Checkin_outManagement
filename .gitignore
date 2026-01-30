@@ -9,3 +9,7 @@
 作成者用_untouchable/certs/key.pem
 __pycache__/
 *.pyc
+作成者用_untouchable/py/__pycache__/achievement_logic.cpython-313.pyc
+作成者用_untouchable/py/__pycache__/database.cpython-313.pyc
+作成者用_untouchable/py/__pycache__/email_sender.cpython-313.pyc
+作成者用_untouchable/py/__pycache__/report_generator.cpython-313.pyc
