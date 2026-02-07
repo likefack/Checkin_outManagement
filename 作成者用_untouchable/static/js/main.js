@@ -78,9 +78,10 @@ function updateTime() {
  * @function fetchInitialData
  * @description サーバーのAPIを叩いて、初期データを取得する
  */
+// 修正: キャッシュ回避のためにタイムスタンプ(?t=...)を付与
 async function fetchInitialData() {
     try {
-        const response = await fetch('/api/initial_data');
+        const response = await fetch(`/api/initial_data?t=${new Date().getTime()}`);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
         studentsData = data.students;
@@ -164,7 +165,7 @@ async function processApiResponse(response) {
             }, 750);
         }
         await fetchInitialData();
-        resetAllSelectors();
+        // resetAllSelectors(); // 【修正】削除: 送信ボタン押下時に即時リセットするため、ここでは行わない
     }
 }
 
@@ -173,6 +174,9 @@ async function handleManualEntry() {
     const student = getSelectedStudent();
     const seatNumber = dom.seatSelect.value;
     if (!student || !seatNumber) return showToast("生徒と座席を選択してください。");
+
+    // 【修正】API通信を待たずに即座にUIをリセットし、次の入力を可能にする
+    resetAllSelectors();
 
     try {
         const response = await fetch('/api/check_in', {
@@ -190,6 +194,10 @@ async function handleManualEntry() {
 async function handleManualExit() {
     const student = getSelectedStudent();
     if (!student) return showToast("生徒を選択してください。");
+
+    // 【修正】API通信を待たずに即座にUIをリセット
+    resetAllSelectors();
+
     const exitTime = new Date().toISOString();
     finalizeExit(student.current_log_id, student.system_id, exitTime);
 }
@@ -212,6 +220,9 @@ async function handleQrInput(event) {
     }
 
     event.target.value = ''; 
+    // 【修正】QR読み取り時も即座に画面の選択状態をリセットする
+    resetAllSelectors();
+
     if (normalizedId === lastScannedId) return; 
     lastScannedId = normalizedId;
     setTimeout(() => { lastScannedId = null; }, 5000);

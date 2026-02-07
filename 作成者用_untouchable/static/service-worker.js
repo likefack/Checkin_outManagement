@@ -1,6 +1,10 @@
-// キャッシュの名前を定義します。バージョンが変わったらこの名前を変更すると、新しいキャッシュが作られます。
-const CACHE_NAME = 'checkin-out-management-cache-v2';
-// キャッシュするファイルのリストです。
+event.target.value = ''; 
+    // 【修正】QR読み取り時も即座に画面の選択状態をリセットする
+    resetAllSelectors();
+
+    if (normalizedId === lastScannedId) return; 
+    lastScannedId = normalizedId;
+    setTimeout(() => { lastScannedId = null; }, 5000);
 const urlsToCache = [
   '/',
   '/?mode=admin',
@@ -42,6 +46,12 @@ self.addEventListener('activate', (event) => {
 
 // 3. フェッチイベント：ブラウザが何かをリクエスト（例: 画像の読み込み、ページの表示）するたびに発生します。
 self.addEventListener('fetch', (event) => {
+  // 【修正】APIリクエスト（/api/を含むURL）はService Workerのキャッシュ処理を経由せず、
+  // 直接ネットワークへリクエストさせることで、遅延やキャッシュ問題を回避します。
+  if (event.request.url.includes('/api/')) {
+    return;
+  }
+
   // event.respondWithは、ブラウザのリクエストに対して、サービスワーカーが何を返すかを制御する命令です。
   event.respondWith(
     // caches.matchで、リクエストされたものがキャッシュに存在するかどうかを確認します。
