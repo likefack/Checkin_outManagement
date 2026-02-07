@@ -1,10 +1,6 @@
-event.target.value = ''; 
-    // 【修正】QR読み取り時も即座に画面の選択状態をリセットする
-    resetAllSelectors();
-
-    if (normalizedId === lastScannedId) return; 
-    lastScannedId = normalizedId;
-    setTimeout(() => { lastScannedId = null; }, 5000);
+// キャッシュの名前を定義します。バージョンが変わったらこの名前を変更すると、新しいキャッシュが作られます。
+const CACHE_NAME = 'checkin-out-management-cache-v5';
+// キャッシュするファイルのリストです。
 const urlsToCache = [
   '/',
   '/?mode=admin',

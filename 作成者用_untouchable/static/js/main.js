@@ -154,18 +154,62 @@ async function processApiResponse(response) {
     const result = await response.json();
 
     //APIレスポンスに含まれる`rank`情報を`showToast`関数に渡す
-    // これにより、入退室の基本メッセージにも常に称号の色が適用される
     showToast(result.message, result.rank);
     
     if (response.ok) {
         if (result.achievement && result.achievement.student_message) {
             setTimeout(() => {
-                // 補足: achievementの中のrankではなく、result直下の最新のrankを渡すように統一します
                 showToast(result.achievement.student_message, result.rank);
             }, 750);
         }
-        await fetchInitialData();
-        // resetAllSelectors(); // 【修正】削除: 送信ボタン押下時に即時リセットするため、ここでは行わない
+
+        // 【修正】サーバーからの差分データ(log_data)がある場合、ローカルの配列を更新して即座に反映させる
+        if (result.log_data) {
+            const newLog = result.log_data;
+            // 既存のリストに同じログIDがあるか探す（更新の場合）
+            const index = currentAttendees.findIndex(a => a.log_id === newLog.log_id);
+            
+            if (index !== -1) {
+                // 退室処理などの場合：既存データを上書き
+                currentAttendees[index] = newLog;
+            } else {
+                // 新規入室の場合：配列に追加
+                currentAttendees.push(newLog);
+            }
+            
+            // 入室時間順などでソートが必要ならここで行う（現在はAPI側でORDER BYしているが、pushしただけだと末尾に追加される）
+            // 簡易的にID順あるいは入室時間順にソートしなおす
+            currentAttendees.sort((a, b) => {
+                // 入室時間の昇順（古い順）
+                return new Date(a.entry_time) - new Date(b.entry_time);
+            });
+
+            // 【追加】入力フォーム側の判定に使われる生徒データ(studentsData)のステータスも更新する
+            // これにより、次回の選択時に「入室/退室」ボタンが正しく判定される
+            const sGrade = newLog.grade;
+            const sClass = newLog.class;
+            const sNumber = newLog.student_number;
+            
+            if (studentsData[sGrade] && studentsData[sGrade][sClass] && studentsData[sGrade][sClass][sNumber]) {
+                const targetStudent = studentsData[sGrade][sClass][sNumber];
+                if (newLog.exit_time) {
+                    // 退室済みになった場合
+                    targetStudent.is_present = false;
+                    targetStudent.current_log_id = null;
+                } else {
+                    // 入室中になった場合
+                    targetStudent.is_present = true;
+                    targetStudent.current_log_id = newLog.log_id;
+                }
+            }
+
+            // テーブル再描画（fetchInitialDataを待たずに実行）
+            renderAttendanceTable();
+        } else {
+            // 万が一データがない場合は従来の全取得を行う
+            await fetchInitialData();
+        }
+        // resetAllSelectorsは削除済み
     }
 }
 

@@ -79,6 +79,18 @@ def get_db_connection():
     return conn
 
 # --- ヘルパー関数 ---
+# 【追加】ログIDから表示用の詳細データを取得する関数
+def _get_log_details(conn, log_id):
+    query = """
+        SELECT al.id AS log_id, s.system_id, al.seat_number, al.entry_time, al.exit_time, 
+               s.name, s.grade, s.class, s.student_number 
+        FROM attendance_logs al 
+        JOIN students s ON al.system_id = s.system_id 
+        WHERE al.id = ?
+    """
+    row = conn.execute(query, (log_id,)).fetchone()
+    return dict(row) if row else None
+
 def parse_db_time_to_jst(dt_str):
     if not dt_str: return None
     try:
@@ -294,7 +306,9 @@ def check_in():
         conn.commit()
 
         # `rank`キーに、上で決定した最新のランク情報(final_rank)を渡す
-        return jsonify({'status': 'success', 'message': f'{student["name"]}さんが入室しました。', 'rank': final_rank, 'achievement': ach_result})
+        # 【修正】リスト更新用のログデータを返却に追加
+        log_data = _get_log_details(conn, new_log_id)
+        return jsonify({'status': 'success', 'message': f'{student["name"]}さんが入室しました。', 'rank': final_rank, 'achievement': ach_result, 'log_data': log_data})
 
     except Exception as e:
         conn.rollback(); return jsonify({'status': 'error', 'message': f'データベースエラー: {e}'}), 500
@@ -335,7 +349,9 @@ def check_out():
         conn.commit()
 
         # `rank`キーに、最新のランク情報(final_rank)を渡す
-        return jsonify({'status': 'success', 'message': f'{student["name"]}さんが退室しました。', 'rank': final_rank, 'achievement': ach_result})
+        # 【修正】リスト更新用のログデータを返却に追加
+        log_data = _get_log_details(conn, log_id_to_update)
+        return jsonify({'status': 'success', 'message': f'{student["name"]}さんが退室しました。', 'rank': final_rank, 'achievement': ach_result, 'log_data': log_data})
 
     except Exception as e:
         conn.rollback(); return jsonify({'status': 'error', 'message': f'データベースエラー: {e}'}), 500
@@ -415,9 +431,13 @@ def qr_process():
         current_title = current_student_state['title'] if current_student_state else None
         final_rank = ach_result.get('rank') if ach_result and ach_result.get('rank') else current_title
 
+        # 【修正】リスト更新用のログデータを取得 (入室時はnew_log_id, 退室時はlog_id_to_updateを使用)
+        target_log_id = new_log_id if not is_present_today else log_id_to_update
+        log_data = _get_log_details(conn, target_log_id)
+
         conn.commit()
 
-        return jsonify({'status': 'success', 'message': message, 'rank': final_rank, 'achievement': ach_result})
+        return jsonify({'status': 'success', 'message': message, 'rank': final_rank, 'achievement': ach_result, 'log_data': log_data})
 
     except Exception as e:
         conn.rollback()
