@@ -184,3 +184,15 @@ thead th {
         background-position: 0% 50%;
     }
 }
+
+/* --- フッター (著作権表示) --- */
+.app-footer {
+    text-align: center;
+    padding: 2px 0; /* 余白を最小限に */
+    font-size: 0.6rem; /* 文字サイズを小さく (約10px) */
+    color: #aaa; /* 目立たない色に */
+    background-color: var(--secondary-color);
+    flex-shrink: 0;
+    margin-top: auto;
+    width: 100%;
+}

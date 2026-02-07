@@ -1,5 +1,5 @@
 // キャッシュの名前を定義します。バージョンが変わったらこの名前を変更すると、新しいキャッシュが作られます。
-const CACHE_NAME = 'checkin-out-management-cache-v1';
+const CACHE_NAME = 'checkin-out-management-cache-v2';
 // キャッシュするファイルのリストです。
 const urlsToCache = [
   '/',
@@ -24,7 +24,23 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// 2. フェッチイベント：ブラウザが何かをリクエスト（例: 画像の読み込み、ページの表示）するたびに発生します。
+// 2. アクティベートイベント：新しいService Workerが起動したときに古いキャッシュを削除します。
+self.addEventListener('activate', (event) => {
+  const cacheWhitelist = [CACHE_NAME];
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheWhitelist.indexOf(cacheName) === -1) {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
+  );
+});
+
+// 3. フェッチイベント：ブラウザが何かをリクエスト（例: 画像の読み込み、ページの表示）するたびに発生します。
 self.addEventListener('fetch', (event) => {
   // event.respondWithは、ブラウザのリクエストに対して、サービスワーカーが何を返すかを制御する命令です。
   event.respondWith(
