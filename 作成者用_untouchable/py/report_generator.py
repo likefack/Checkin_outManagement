@@ -298,11 +298,11 @@ def create_report(db_path, start_date_str, end_date_str):
             # --- シート6: 時間帯別在室人数サマリー ---
             # 各滞在がカバーする時間帯（日時）のリストを生成
             def get_hour_timestamps(row):
-                start = row['entry_time'].floor('H')
+                start = row['entry_time'].floor('h')
                 # 退室時間がジャスト(例: 10:00:00)の場合は、その時間帯(10時台)には在室していないとみなすため1秒引く
-                end = (row['exit_time'] - pd.Timedelta(seconds=1)).floor('H')
+                end = (row['exit_time'] - pd.Timedelta(seconds=1)).floor('h')
                 # startからendまでの1時間ごとの「日時そのもの」を取得（日付情報を保持するため）
-                return pd.date_range(start, end, freq='H').tolist()
+                return pd.date_range(start, end, freq='h').tolist()
 
             # データフレームに各利用者の在室時間帯（日時）リストを追加
             df_occupancy = df[['grade_jp', 'system_id']].copy()
