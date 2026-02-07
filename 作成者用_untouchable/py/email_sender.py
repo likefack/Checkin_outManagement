@@ -3,6 +3,9 @@ from email.mime.text import MIMEText
 from email.header import Header
 import os
 import threading
+import logging
+
+logger = logging.getLogger(__name__)
 
 def send_email(recipient_email, subject, body):
     """
@@ -14,7 +17,7 @@ def send_email(recipient_email, subject, body):
     sender_name = os.getenv('SENDER_NAME', '入退室管理システム')
 
     if not gmail_user or not gmail_pass:
-        print("メール送信エラー: Gmailのユーザー名またはパスワードが.envファイルに設定されていません。")
+        logger.error("メール送信エラー: Gmailのユーザー名またはパスワードが.envファイルに設定されていません。")
         return
 
     try:
@@ -29,10 +32,10 @@ def send_email(recipient_email, subject, body):
         server.login(gmail_user, gmail_pass)
         server.send_message(msg)
         server.quit()
-        print(f"メールを送信しました: {recipient_email}")
+        logger.info(f"[メール送信] 成功 - 宛先: {recipient_email}")
 
     except Exception as e:
-        print(f"メール送信中にエラーが発生しました: {e}")
+        logger.error(f"[メール送信] 失敗 - 宛先: {recipient_email}, エラー: {e}", exc_info=True)
 
 def send_email_async(recipient_email, subject, body):
     """
@@ -40,7 +43,7 @@ def send_email_async(recipient_email, subject, body):
     """
     # recipient_emailが空かNoneの場合は何もしない
     if not recipient_email:
-        print("メール宛先が空のため、送信をスキップしました。")
+        logger.info("メール宛先が空のため、送信をスキップしました。")
         return
         
     # スレッドを作成して、send_email関数をバックグラウンドで実行

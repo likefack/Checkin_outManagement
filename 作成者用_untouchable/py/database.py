@@ -2,6 +2,9 @@ import sqlite3
 import pandas as pd
 import glob
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 # バッチファイルで .../py フォルダに移動してから実行されることを前提とする相対パス
 DB_PATH = os.path.join('..', 'students.db') 
@@ -49,7 +52,7 @@ def create_tables(conn):
     )
     ''')
     conn.commit()
-    print("データベースのテーブルを定義しました。")
+    logger.info("データベースのテーブルを定義しました。")
 
 def sync_students_from_excel(conn):
     student_excel_file = get_student_excel_path()
@@ -74,7 +77,7 @@ def sync_students_from_excel(conn):
     for col in ['system_id', 'enrollment_year', 'grade', 'class', 'student_number']:
          df_students[col] = df_students[col].astype(int)
 
-    print(f"'{os.path.basename(student_excel_file)}' との同期を開始します...")
+    logger.info(f"'{os.path.basename(student_excel_file)}' との同期を開始します...")
     cursor = conn.cursor()
     updated_count = 0
     inserted_count = 0
@@ -102,7 +105,7 @@ def sync_students_from_excel(conn):
             inserted_count += 1
             
     conn.commit()
-    print(f"生徒情報の同期完了: 更新 {updated_count} 件, 新規 {inserted_count} 件")
+    logger.info(f"生徒情報の同期完了: 更新 {updated_count} 件, 新規 {inserted_count} 件")
 
 
 def import_phrases_from_excel(conn):
@@ -131,7 +134,7 @@ def import_phrases_from_excel(conn):
     df.rename(columns={'属性': 'category', 'phrase': 'text', '発信者': 'author'}, inplace=True)
     df_phrases = df[['category', 'text', 'author', 'lifespan']]
     df_phrases.sample(frac=1).reset_index(drop=True).to_sql('phrases', conn, if_exists='append', index=False)
-    print(f"'{os.path.basename(PHRASES_EXCEL_PATH)}' からフレーズをインポートしました。")
+    logger.info(f"'{os.path.basename(PHRASES_EXCEL_PATH)}' からフレーズをインポートしました。")
 
 
 def init_db():
@@ -152,10 +155,10 @@ def init_db():
         if cursor.fetchone()[0] == 0:
             import_phrases_from_excel(conn)
             
-        print("データベースの初期化・更新処理が完了しました。")
+        logger.info("データベースの初期化・更新処理が完了しました。")
 
     except Exception as e:
-        print(f"!!! データベース処理中にエラーが発生しました: {e} !!!")
+        logger.error(f"!!! データベース処理中にエラーが発生しました: {e} !!!", exc_info=True)
         # 既存DBへの影響を考慮し、ここではDB削除を行わずエラーを通知するのみとする
         conn.close()
         raise e

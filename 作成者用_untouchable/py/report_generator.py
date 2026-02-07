@@ -3,6 +3,9 @@ import sqlite3
 import os
 import datetime
 import pytz
+import logging
+
+logger = logging.getLogger(__name__)
 
 # --- 定数・ヘルパー関数 ---
 JST = pytz.timezone('Asia/Tokyo')
@@ -340,5 +343,5 @@ def create_report(db_path, start_date_str, end_date_str):
         
     except Exception as e:
         error_message = f"レポート作成中にエラーが発生しました: {e}"
-        print(error_message)
+        logger.error(error_message, exc_info=True)
         return None, error_message

@@ -49,16 +49,21 @@ def configure_logging(app):
     stream_handler.setLevel(logging.INFO)
     # ------------------------------------
 
-    # Flaskアプリケーション自体のロガーにハンドラを追加（ファイル＋コンソール）
-    app.logger.addHandler(file_handler)
-    app.logger.addHandler(stream_handler)
-    app.logger.setLevel(logging.INFO)
+    # ルートロガー設定（ここだけにハンドラを集約する）
+    root_logger = logging.getLogger()
+    
+    # 既存のハンドラがあればクリア（重複防止）
+    if root_logger.hasHandlers():
+        root_logger.handlers.clear()
 
-    # Werkzeug（Flaskのサーバー機能）のアクセスログも同様に設定
-    werkzeug_logger = logging.getLogger('werkzeug')
-    werkzeug_logger.addHandler(file_handler)
-    werkzeug_logger.addHandler(stream_handler)
-    werkzeug_logger.setLevel(logging.INFO)
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(stream_handler)
+    root_logger.setLevel(logging.INFO)
+
+    # アプリやWerkzeugのロガーは、独自のハンドラを持たせずルートへ伝播させる
+    # これにより「アプリで出力」→「ルートでも出力」という重複を防ぐ
+    app.logger.handlers = []
+    logging.getLogger('werkzeug').handlers = []
 
 # ログ設定を適用
 configure_logging(app)
@@ -93,10 +98,10 @@ def _reset_forgotten_checkin_status(conn, system_id):
     if student and student['is_present']:
         log_entry = conn.execute('SELECT entry_time FROM attendance_logs WHERE id = ?', (student['current_log_id'],)).fetchone()
         if log_entry and parse_db_time_to_jst(log_entry['entry_time']).date() < datetime.datetime.now(JST).date():
-            print(f"ID:{system_id} の前日以前の入室記録を検出。入退ステータスをリセットします。")
+            app.logger.info(f"ID:{system_id} の前日以前の入室記録を検出。入退ステータスをリセットします。")
             conn.execute('UPDATE students SET is_present = 0, current_log_id = NULL WHERE system_id = ?', (system_id,))
             conn.commit()
-            print(f"ID:{system_id} の入退ステータスをリセットしました。")
+            app.logger.info(f"ID:{system_id} の入退ステータスをリセットしました。")
             return True
     return False
 
@@ -197,7 +202,7 @@ def get_initial_data():
                     else:
                         # 前日以前の記録ならリセット対象に追加
                         ids_to_reset.append(student['system_id'])
-                        print(f"ID:{student['system_id']} の前日以前の入室記録を検出(initial_data)。リセット対象に追加。")
+                        app.logger.info(f"ID:{student['system_id']} の前日以前の入室記録を検出(initial_data)。リセット対象に追加。")
             # else: is_present が 0 または log_id がない場合は is_present_today_for_frontend は False のまま
 
             # フロントエンドに返す is_present を設定
@@ -215,7 +220,7 @@ def get_initial_data():
             placeholders = ','.join('?' * len(ids_to_reset))
             conn.execute(f'UPDATE students SET is_present = 0, current_log_id = NULL WHERE system_id IN ({placeholders})', ids_to_reset)
             conn.commit()
-            print(f"リセット対象 {len(ids_to_reset)} 件のステータスをDBでリセットしました。")
+            app.logger.info(f"リセット対象 {len(ids_to_reset)} 件のステータスをDBでリセットしました。")
 
         # 今日の入退室記録を取得
         attendees_cursor = conn.execute('SELECT al.id AS log_id, s.system_id, al.seat_number, al.entry_time, al.exit_time, s.name, s.grade, s.class, s.student_number FROM attendance_logs al JOIN students s ON al.system_id = s.system_id WHERE al.entry_time >= ? ORDER BY al.entry_time ASC', (start_of_day_utc.isoformat(),))
@@ -224,7 +229,7 @@ def get_initial_data():
         return jsonify({'students': students_data_nested, 'attendees': current_attendees})
 
     except Exception as e:
-        print(f"Error in get_initial_data: {e}")
+        app.logger.error(f"Error in get_initial_data: {e}", exc_info=True)
         # エラーが発生した場合もコネクションを閉じる
         if conn:
             conn.close()
@@ -258,9 +263,9 @@ def check_in():
                     is_present_today = True
                 else:
                     # 前日以前の記録ならリセット
-                    print(f"ID:{system_id} の前日以前の入室記録を検出(check_in)。ステータスをリセットします。")
+                    app.logger.info(f"ID:{system_id} の前日以前の入室記録を検出(check_in)。ステータスをリセットします。")
                     conn.execute('UPDATE students SET is_present = 0, current_log_id = NULL WHERE system_id = ?', (system_id,))
-                    print(f"ID:{system_id} のステータスをリセットしました。")
+                    app.logger.info(f"ID:{system_id} のステータスをリセットしました。")
                     # student 変数はここでは再取得不要（入室処理に進むため）
 
         #今日の記録があるかで分岐 
@@ -283,6 +288,9 @@ def check_in():
         # なければ最初にDBから読み込んだランク情報を使う。
         final_rank = ach_result.get('rank') if ach_result and ach_result.get('rank') else student['title']
         
+        # [操作ログ] 手動入室の詳細
+        app.logger.info(f"[操作ログ] 入室処理(手入力) - 生徒ID: {system_id}, 座席: {seat_number}, 実行者IP: {request.remote_addr}")
+
         conn.commit()
 
         # `rank`キーに、上で決定した最新のランク情報(final_rank)を渡す
@@ -321,6 +329,9 @@ def check_out():
         # 最終的に通知に使うランクを決定する
         final_rank = ach_result.get('rank') if ach_result and ach_result.get('rank') else student['title']
         
+        # [操作ログ] 手動退室の詳細
+        app.logger.info(f"[操作ログ] 退室処理(手入力) - 生徒ID: {system_id}, 実行者IP: {request.remote_addr}")
+
         conn.commit()
 
         # `rank`キーに、最新のランク情報(final_rank)を渡す
@@ -334,6 +345,9 @@ def check_out():
 @app.route('/api/qr_process', methods=['POST'])
 def qr_process():
     data = request.json
+    # [デバッグログ] QRコード読み取り時の生データ（受信ペイロード）
+    app.logger.info(f"[デバッグログ] QR受信データ: {data}, 実行者IP: {request.remote_addr}")
+
     try: # system_id が数値でない場合のエラーを捕捉
         system_id = int(data.get('system_id'))
     except (ValueError, TypeError):
@@ -357,9 +371,9 @@ def qr_process():
                     is_present_today = True
                 else:
                     #  前日以前の記録なら、ここで強制的にリセット 
-                    print(f"ID:{system_id} の前日以前の入室記録を検出(qr_process)。ステータスをリセットします。")
+                    app.logger.info(f"ID:{system_id} の前日以前の入室記録を検出(qr_process)。ステータスをリセットします。")
                     conn.execute('UPDATE students SET is_present = 0, current_log_id = NULL WHERE system_id = ?', (system_id,))
-                    print(f"ID:{system_id} のステータスをリセットしました。")
+                    app.logger.info(f"ID:{system_id} のステータスをリセットしました。")
                     # is_present_today は False のまま（=入室処理へ）
 
         message, ach_result = "", None
@@ -380,6 +394,9 @@ def qr_process():
             conn.execute('UPDATE students SET is_present = 0, current_log_id = NULL WHERE system_id = ?', (system_id,))
             message = f'{student["name"]}さんが自習室から退室しました。'
             ach_result = _handle_notifications(conn, system_id, 'check_out', log_id_to_update)
+            
+            # [操作ログ] QR退室の詳細
+            app.logger.info(f"[操作ログ] 退室処理(QR) - 生徒ID: {system_id}")
         else:
             # --- 入室処理 ---
             entry_time_utc = datetime.datetime.now(UTC)
@@ -388,6 +405,9 @@ def qr_process():
             conn.execute('UPDATE students SET is_present = 1, current_log_id = ? WHERE system_id = ?', (new_log_id, system_id))
             message = f'{student["name"]}さんが自習室に入室しました。'
             ach_result = _handle_notifications(conn, system_id, 'check_in', new_log_id)
+
+            # [操作ログ] QR入室の詳細 (QR入室時は座席指定なしのためNULL/None扱いです)
+            app.logger.info(f"[操作ログ] 入室処理(QR) - 生徒ID: {system_id}, 座席: 指定なし")
 
         # 最新の称号情報を決定
         # student変数はリセット時に再取得しないため、必要ならここで再取得
@@ -401,7 +421,7 @@ def qr_process():
 
     except Exception as e:
         conn.rollback()
-        print(f"Error in qr_process: {e}") # エラーログを追加
+        app.logger.error(f"Error in qr_process: {e}", exc_info=True) # エラーログを追加
         return jsonify({'status': 'error', 'message': f'データベースエラー: {e}'}), 500
     finally:
         # finallyブロックで確実にコネクションを閉じる
@@ -449,7 +469,7 @@ def exit_all():
         return jsonify({'status': 'success', 'message': f'{len(present_students)}名の生徒を全員退室させました。'})
     except Exception as e:
         conn.rollback()
-        print(f"Error in exit_all: {e}")
+        app.logger.error(f"Error in exit_all: {e}", exc_info=True)
         return jsonify({'status': 'error', 'message': f'データベースエラー: {e}'}), 500
     finally:
         conn.close()
@@ -459,11 +479,20 @@ def handle_create_report():
     data = request.json
     start_date, end_date = data.get('start_date'), data.get('end_date')
     if not start_date or not end_date: return jsonify({'status': 'error', 'message': '期間が指定されていません。'}), 400
+
+    # [操作ログ] レポート作成開始
+    app.logger.info(f"[操作ログ] 集計レポート作成開始 - 期間: {start_date} ～ {end_date}, 実行者IP: {request.remote_addr}")
+
     file_path, message = create_report(database.DB_PATH, start_date, end_date)
     if file_path:
-        if file_path == "No data": return jsonify({'status': 'info', 'message': message})
+        if file_path == "No data": 
+            app.logger.info(f"[操作ログ] 集計レポート作成完了(データなし) - 期間: {start_date} ～ {end_date}")
+            return jsonify({'status': 'info', 'message': message})
+        
+        app.logger.info(f"[操作ログ] 集計レポート作成完了(成功) - 期間: {start_date} ～ {end_date}, 出力ファイル: {os.path.basename(file_path)}")
         return jsonify({'status': 'success', 'message': message})
     else:
+        app.logger.error(f"[操作ログ] 集計レポート作成失敗 - 期間: {start_date} ～ {end_date}, エラー: {message}")
         return jsonify({'status': 'error', 'message': message}), 500
 
 # --- 記録編集ページ用API ---
@@ -521,12 +550,10 @@ def get_logs():
             # print(f"[デバッグ] 変換後の開始日(UTC ISO): {start_utc_iso}") # デバッグ出力追加
         except ValueError as e:
             # エラー発生時の詳細ログ出力
-            print(f"【エラー】開始日の変換に失敗しました。入力値: '{start_raw}', エラー: {e}")
-            print(traceback.format_exc()) # エラーの詳細な発生箇所を出力
+            app.logger.error(f"【エラー】開始日の変換に失敗しました。入力値: '{start_raw}', エラー: {e}\n{traceback.format_exc()}")
         except Exception as e:
             # 予期せぬエラー発生時のログ出力
-            print(f"【予期せぬエラー】開始日の処理中に問題が発生しました。入力値: '{start_raw}', エラー: {e}")
-            print(traceback.format_exc()) # エラーの詳細な発生箇所を出力
+            app.logger.error(f"【予期せぬエラー】開始日の処理中に問題が発生しました。入力値: '{start_raw}', エラー: {e}\n{traceback.format_exc()}")
 
     if filters['end']:
         end_raw = filters['end'] # 元の値を保持
@@ -540,12 +567,10 @@ def get_logs():
             # print(f"[デバッグ] 変換後の終了日(UTC ISO): {end_utc_iso}") # デバッグ出力追加
         except ValueError as e:
             # エラー発生時の詳細ログ出力
-            print(f"【エラー】終了日の変換に失敗しました。入力値: '{end_raw}', エラー: {e}")
-            print(traceback.format_exc()) # エラーの詳細な発生箇所を出力
+            app.logger.error(f"【エラー】終了日の変換に失敗しました。入力値: '{end_raw}', エラー: {e}\n{traceback.format_exc()}")
         except Exception as e:
             # 予期せぬエラー発生時のログ出力
-            print(f"【予期せぬエラー】終了日の処理中に問題が発生しました。入力値: '{end_raw}', エラー: {e}")
-            print(traceback.format_exc()) # エラーの詳細な発生箇所を出力
+            app.logger.error(f"【予期せぬエラー】終了日の処理中に問題が発生しました。入力値: '{end_raw}', エラー: {e}\n{traceback.format_exc()}")
     if filters['name']:
         conditions.append("s.name LIKE ?"); params.append(f"%{filters['name']}%")
     if filters['grade']:
@@ -591,6 +616,9 @@ def add_log():
         cursor.execute('INSERT INTO attendance_logs (system_id, entry_time, exit_time, seat_number) VALUES (?, ?, ?, ?)', (system_id, entry_time_utc, exit_time_utc, seat_number))
         new_log_id = cursor.lastrowid # 作成されたログのIDを取得
 
+        # [監査ログ] 記録の追加
+        app.logger.info(f"[監査ログ] 記録追加 - 実行者IP: {request.remote_addr}, 新規ID: {new_log_id}, 対象生徒ID: {system_id}, 入室: {entry_time_utc}, 退室: {exit_time_utc}, 座席: {seat_number}")
+
         is_today = datetime.datetime.fromisoformat(entry_time_utc).astimezone(JST).date() == datetime.datetime.now(JST).date()
         if exit_time_utc is None and is_today:
             # 該当生徒のステータスを「在室中」に更新する
@@ -620,6 +648,9 @@ def update_log(log_id):
         # --- 2. ログ記録を更新 ---
         conn.execute('UPDATE attendance_logs SET system_id = ?, entry_time = ?, exit_time = ?, seat_number = ? WHERE id = ?', (system_id, entry_time_utc, exit_time_utc, seat_number, log_id))
 
+        # [監査ログ] 記録の編集
+        app.logger.info(f"[監査ログ] 記録編集 - 実行者IP: {request.remote_addr}, 対象ログID: {log_id}, 変更内容: [生徒ID: {system_id}, 入室: {entry_time_utc}, 退室: {exit_time_utc}, 座席: {seat_number}]")
+
         # --- 3. 新しいステータスを条件付きで設定 ---
         # 更新後の入室日が今日であるかを確認
         is_today = datetime.datetime.fromisoformat(entry_time_utc).astimezone(JST).date() == datetime.datetime.now(JST).date()
@@ -640,6 +671,9 @@ def update_log(log_id):
 def delete_log(log_id):
     conn = get_db_connection()
     try:
+        # [監査ログ] 記録の削除（削除実行前に記録）
+        app.logger.info(f"[監査ログ] 記録削除 - 実行者IP: {request.remote_addr}, 対象ログID: {log_id}")
+
         conn.execute('UPDATE students SET is_present = 0, current_log_id = NULL WHERE current_log_id = ?', (log_id,))
         conn.execute('DELETE FROM attendance_logs WHERE id = ?', (log_id,))
         conn.commit()

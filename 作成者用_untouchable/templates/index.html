@@ -113,6 +113,7 @@
  <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
+                // service-worker.js は static フォルダ直下に配置してください
                 navigator.serviceWorker.register("{{ url_for('static', filename='service-worker.js') }}")
                     .then(registration => {
                         console.log('ServiceWorker registration successful with scope: ', registration.scope);
