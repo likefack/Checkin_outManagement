@@ -12,7 +12,8 @@ SERVER_IP = os.getenv("SERVER_IP")
 
 CERT_FILE = "cert.pem"
 KEY_FILE = "key.pem"
-CERT_DIR = "certs"
+# 修正: スクリプトのあるディレクトリを基準に 'certs' フォルダのパスを決定する
+CERT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "certs")
 
 def generate_self_signed_cert():
     """
@@ -48,9 +49,10 @@ def generate_self_signed_cert():
     cert.set_issuer(cert.get_subject())
     cert.set_pubkey(key)
     
+    # 修正: IP:127.0.0.1 を追加
     cert.add_extensions([
         crypto.X509Extension(
-            b"subjectAltName", False, f"IP:{SERVER_IP}".encode()
+            b"subjectAltName", False, f"IP:{SERVER_IP}, IP:127.0.0.1".encode()
         )
     ])
 

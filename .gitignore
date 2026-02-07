@@ -4,6 +4,7 @@
 管理者用_touchable/.env
 作成者用_untouchable/students.db
 管理者用_touchable/生徒情報_*-.xlsx
+管理者用_touchable/motivational_phrases.xlsx
 作成者用_untouchable/venv/
 作成者用_untouchable/certs/cert.pem
 作成者用_untouchable/certs/key.pem
