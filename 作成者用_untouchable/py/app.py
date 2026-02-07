@@ -3,9 +3,11 @@ import sqlite3
 import datetime
 import pytz 
 import traceback
+import logging # 追加
+from logging.handlers import RotatingFileHandler # 追加
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
-import database 
+import database
 from report_generator import create_report
 from achievement_logic import check_achievements
 from email_sender import send_email_async
@@ -17,6 +19,49 @@ load_dotenv(dotenv_path)
 app = Flask(__name__, 
             template_folder=os.path.join(os.path.dirname(__file__), '..', 'templates'),
             static_folder=os.path.join(os.path.dirname(__file__), '..', 'static'))
+
+# --- ログ設定の追加 ---
+def configure_logging(app):
+    # ログ保存先ディレクトリ: ../../管理者用_touchable/server_logs
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    log_dir = os.path.join(base_dir, '..', '..', '管理者用_touchable', 'server_logs')
+
+    # ディレクトリが存在しない場合は作成
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+
+    # ログファイルのパス
+    log_file_path = os.path.join(log_dir, 'server.log')
+
+    # ローテーション設定: 1MBごとに新しいファイルにし、最大10世代(server.log.1, ... .10)残す
+    file_handler = RotatingFileHandler(log_file_path, maxBytes=1024*1024, backupCount=10, encoding='utf-8')
+    
+    # ログのフォーマット設定: 日時 レベル モジュール メッセージ
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(module)s - %(message)s')
+    file_handler.setFormatter(formatter)
+    
+    # ログレベル設定 (INFO以上を記録)
+    file_handler.setLevel(logging.INFO)
+
+    # --- 追加: コンソール出力用のハンドラ ---
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    stream_handler.setLevel(logging.INFO)
+    # ------------------------------------
+
+    # Flaskアプリケーション自体のロガーにハンドラを追加（ファイル＋コンソール）
+    app.logger.addHandler(file_handler)
+    app.logger.addHandler(stream_handler)
+    app.logger.setLevel(logging.INFO)
+
+    # Werkzeug（Flaskのサーバー機能）のアクセスログも同様に設定
+    werkzeug_logger = logging.getLogger('werkzeug')
+    werkzeug_logger.addHandler(file_handler)
+    werkzeug_logger.addHandler(stream_handler)
+    werkzeug_logger.setLevel(logging.INFO)
+
+# ログ設定を適用
+configure_logging(app)
 
 # --- タイムゾーン定義 ---
 JST = pytz.timezone('Asia/Tokyo')
