@@ -342,6 +342,6 @@ def create_report(db_path, start_date_str, end_date_str):
         return file_path, f"レポートが正常に作成されました: {os.path.basename(file_path)}"
         
     except Exception as e:
-        error_message = f"レポート作成中にエラーが発生しました: {e}"
+        error_message = f"レポート作成中にエラーが発生しました。該当期間のExcelファイルが開かれていないかを確認してください: {e}"
         logger.error(error_message, exc_info=True)
         return None, error_message
