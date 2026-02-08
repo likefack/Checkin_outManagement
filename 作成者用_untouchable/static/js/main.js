@@ -9,6 +9,8 @@ let currentAttendees = [];
 let isCalendarOpen = false;
 let lastScannedId = null; 
 const exitTimers = {}; // { log_id: timerId }
+// オフライン送信待ちキュー（ローカルストレージから読み込み）
+let offlineQueue = JSON.parse(localStorage.getItem('offlineQueue')) || [];
 
 // --- DOM要素の取得 ---
 const dom = {
@@ -46,6 +48,13 @@ function initializePage() {
 
     fetchInitialData();
     setupEventListeners();
+    
+    // オンライン復帰時にキューを処理するイベントリスナー
+    window.addEventListener('online', processOfflineQueue);
+    // ページ読み込み時に未送信があれば処理を試みる
+    if (navigator.onLine && offlineQueue.length > 0) {
+        processOfflineQueue();
+    }
 
     if (APP_MODE === 'admin') {
         flatpickr(dom.reportPeriodInput, {
@@ -85,13 +94,32 @@ async function fetchInitialData() {
         const response = await fetch(`/api/initial_data?t=${new Date().getTime()}`);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
+        
         studentsData = data.students;
         currentAttendees = data.attendees;
+        
+        // 【追加】取得成功時にローカルストレージに最新のマスタデータを保存
+        localStorage.setItem('cachedStudentsData', JSON.stringify(studentsData));
+        
         populateGradeSelect();
         renderAttendanceTable();
     } catch (error) {
         console.error('初期データの読み込みに失敗しました:', error);
-        showToast("エラー: サーバーから情報を取得できませんでした。");
+        
+        // 【追加】通信エラー時はキャッシュからの読み込みを試みる
+        const cached = localStorage.getItem('cachedStudentsData');
+        if (cached) {
+            studentsData = JSON.parse(cached);
+            // currentAttendees（現在の入室者リスト）はリアルタイム性が重要なので
+            // オフライン時は空にするか、あるいは別途キャッシュするか判断が分かれますが、
+            // ここでは「名簿（studentsData）」の復旧を優先し、入室者リストは空（または以前の状態）とします。
+            // ※もし入室者リストもキャッシュしたい場合は同様にlocalStorageへ保存してください。
+            
+            populateGradeSelect();
+            showToast("オフラインモード: 保存された名簿データを使用しています。");
+        } else {
+            showToast("エラー: サーバーに接続できず、保存されたデータもありません。");
+        }
     }
 }
 
@@ -223,16 +251,29 @@ async function handleManualEntry() {
     // 【修正】API通信を待たずに即座にUIをリセットし、次の入力を可能にする
     resetAllSelectors();
 
+    const payload = { system_id: student.system_id, seat_number: seatNumber };
+
+    // オフライン判定
+    if (!navigator.onLine) {
+        saveToOfflineQueue('check_in', payload, `${student.name}さんの入室を受け付けました (オフライン)`);
+        return; // API通信は行わない
+    }
+
     try {
         const response = await fetch('/api/check_in', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ system_id: student.system_id, seat_number: seatNumber })
+            body: JSON.stringify(payload)
         });
+        // サーバーが500系エラーなどを返した場合も例外を投げてcatchブロックへ誘導する
+        if (!response.ok && response.status >= 500) {
+            throw new Error(`Server Error: ${response.status}`);
+        }
         await processApiResponse(response);
     } catch (error) {
-        console.error('入室処理エラー:', error);
-        showToast("エラー: 入室処理中に問題が発生しました。");
+        console.error('入室処理エラー(通信不可):', error);
+        // 通信エラーまたはサーバーエラー時は、オフラインキューに保存して後で再送する
+        saveToOfflineQueue('check_in', payload, `${student.name}さんの入室を保存しました (通信待機)`);
     }
 }
 
@@ -244,6 +285,8 @@ async function handleManualExit() {
     resetAllSelectors();
 
     const exitTime = new Date().toISOString();
+    
+    // finalizeExit内でオフライン判定を行うため、そのまま呼び出す
     finalizeExit(student.current_log_id, student.system_id, exitTime);
 }
 
@@ -271,16 +314,32 @@ async function handleQrInput(event) {
     if (normalizedId === lastScannedId) return; 
     lastScannedId = normalizedId;
     setTimeout(() => { lastScannedId = null; }, 5000);
+
+    const payload = { system_id: normalizedId };
+
+    // オフライン判定
+    if (!navigator.onLine) {
+        // 時刻情報を付与して保存（フェーズ1のサーバー修正でこれを受け取る）
+        payload.timestamp = new Date().toISOString();
+        const studentName = findStudentNameBySystemId(normalizedId) || `ID:${normalizedId}`;
+        saveToOfflineQueue('qr_process', payload, `${studentName}さんの入退室を受け付けました (オフライン)`);
+        return;
+    }
+
     try {
         const response = await fetch('/api/qr_process', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ system_id: normalizedId })
+            body: JSON.stringify(payload)
         });
+        if (!response.ok && response.status >= 500) {
+            throw new Error(`Server Error: ${response.status}`);
+        }
         await processApiResponse(response);
     } catch (error) {
-        console.error('QR処理エラー:', error);
-        showToast("エラー: QR処理中に問題が発生しました。");
+        console.error('QR処理エラー(通信不可):', error);
+        const studentName = findStudentNameBySystemId(normalizedId) || `ID:${normalizedId}`;
+        saveToOfflineQueue('qr_process', payload, `${studentName}さんの入退室を保存しました (通信待機)`);
     }
 }
 
@@ -337,16 +396,31 @@ function cancelExitProcess(button) {
 }
 
 async function finalizeExit(logId, systemId, exitTime) {
+    const payload = { log_id: logId, system_id: systemId, exit_time: exitTime };
+
+    // オフライン判定
+    if (!navigator.onLine) {
+        // 退室時はstudentオブジェクトが直接参照できないため、IDから名前を探すヘルパーを利用
+        const studentName = findStudentNameBySystemId(systemId) || "退室";
+        saveToOfflineQueue('check_out', payload, `${studentName}さんの退室を受け付けました (オフライン)`);
+        return;
+    }
+
     try {
         const response = await fetch('/api/check_out', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ log_id: logId, system_id: systemId, exit_time: exitTime })
+            body: JSON.stringify(payload)
         });
+        if (!response.ok && response.status >= 500) {
+            throw new Error(`Server Error: ${response.status}`);
+        }
         await processApiResponse(response);
     } catch (error) {
-        console.error('退室処理エラー:', error);
-        showToast("エラー: 退室処理中に問題が発生しました。");
+        console.error('退室処理エラー(通信不可):', error);
+        // 名前解決を試みる
+        const studentName = findStudentNameBySystemId(systemId) || "退室";
+        saveToOfflineQueue('check_out', payload, `${studentName}さんの退室を保存しました (通信待機)`);
     }
 }
 
@@ -750,6 +824,104 @@ function updateDuration(cell, exitTime = null) {
 function focusQrInput() {
     if (dom.qrInput && !isCalendarOpen) {
         dom.qrInput.focus();
+    }
+}
+
+/**
+ * IDから生徒名を検索するヘルパー関数
+ */
+function findStudentNameBySystemId(systemId) {
+    // studentsDataは {grade: {class: {number: studentObj}}} の構造
+    // 全探索してIDが一致する生徒を探す
+    for (const grade in studentsData) {
+        for (const cls in studentsData[grade]) {
+            for (const num in studentsData[grade][cls]) {
+                const s = studentsData[grade][cls][num];
+                // 型不一致を防ぐため == で比較、または文字列化して比較
+                if (String(s.system_id) === String(systemId)) {
+                    return s.name;
+                }
+            }
+        }
+    }
+    return null;
+}
+
+/**
+ * オフライン時のアクションをキューに保存する
+ */
+function saveToOfflineQueue(actionType, payload, toastMessage = null) {
+    // 現在時刻を記録（サーバー送信時に使用）
+    // 手動入退室ではすでにpayloadに時刻が含まれる場合があるが、
+    // QR処理などのためにここで一律付与または確認する
+    if (!payload.timestamp && !payload.entry_time && !payload.exit_time) {
+        payload.timestamp = new Date().toISOString();
+    } else if (actionType === 'check_in' && !payload.entry_time) {
+         // 手動入室用にentry_timeキーで保存
+         payload.entry_time = new Date().toISOString();
+    }
+
+    const item = {
+        action: actionType,
+        payload: payload,
+        queuedAt: new Date().toISOString()
+    };
+    
+    offlineQueue.push(item);
+    localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
+    
+    // 具体的で安心感のあるメッセージを表示
+    const msg = toastMessage || `データを保存しました (オフライン)。復帰時に送信されます。`;
+    showToast(msg, null);
+}
+
+/**
+ * オフラインキューに溜まったデータを順次送信する
+ */
+async function processOfflineQueue() {
+    if (offlineQueue.length === 0) return;
+    if (!navigator.onLine) return;
+
+    console.log(`オフラインキューの同期を開始します (${offlineQueue.length}件)`);
+    showToast(`通信復帰: ${offlineQueue.length}件のデータを送信中...`);
+
+    // 配列のコピーを作成して処理（処理成功したものから削除するため）
+    const queueToProcess = [...offlineQueue];
+    let successCount = 0;
+
+    for (const item of queueToProcess) {
+        let url = '';
+        if (item.action === 'check_in') url = '/api/check_in';
+        else if (item.action === 'check_out') url = '/api/check_out';
+        else if (item.action === 'qr_process') url = '/api/qr_process';
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(item.payload)
+            });
+
+            if (response.ok) {
+                // 送信成功したらキューから削除
+                offlineQueue.shift(); // 先頭（一番古いもの）を削除
+                localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
+                successCount++;
+            } else {
+                console.error('同期エラー: サーバーがエラーを返しました', await response.text());
+                // エラー内容によっては中断すべきだが、とりあえず次の処理へ
+            }
+        } catch (error) {
+            console.error('同期通信エラー:', error);
+            // 通信エラー（またオフラインになった等）なら処理を中断
+            break; 
+        }
+    }
+
+    if (successCount > 0) {
+        showToast(`${successCount}件のデータを同期しました。`);
+        // リストを最新にする
+        fetchInitialData();
     }
 }
 

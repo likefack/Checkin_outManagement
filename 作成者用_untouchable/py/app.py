@@ -302,7 +302,13 @@ def check_in():
             return jsonify({'status': 'error', 'message': f'{student["name"]}さんは本日既に入室済みです。'}), 409
         else:
             # --- 入室処理 ---
-            entry_time_utc = datetime.datetime.now(UTC)
+            # クライアントから指定時刻があればそれを使用（オフライン同期用）、なければ現在時刻
+            entry_time_str = data.get('entry_time')
+            if entry_time_str:
+                entry_time_utc = datetime.datetime.fromisoformat(entry_time_str).astimezone(UTC)
+            else:
+                entry_time_utc = datetime.datetime.now(UTC)
+
             cursor = conn.execute('INSERT INTO attendance_logs (system_id, seat_number, entry_time) VALUES (?, ?, ?)', (system_id, seat_number, entry_time_utc.isoformat()))
             new_log_id = cursor.lastrowid
             conn.execute('UPDATE students SET is_present = 1, current_log_id = ? WHERE system_id = ?', (new_log_id, system_id))
@@ -316,7 +322,8 @@ def check_in():
         final_rank = ach_result.get('rank') if ach_result and ach_result.get('rank') else student['title']
         
         # [操作ログ] 手動入室の詳細
-        app.logger.info(f"[操作ログ] 入室処理(手入力) - 生徒ID: {system_id}, 座席: {seat_number}, 実行者IP: {request.remote_addr}")
+        log_suffix = " (オフライン同期)" if data.get('entry_time') else ""
+        app.logger.info(f"[操作ログ] 入室処理(手入力){log_suffix} - 生徒ID: {system_id}, 座席: {seat_number}, 実行者IP: {request.remote_addr}")
 
         conn.commit()
         
@@ -362,7 +369,8 @@ def check_out():
         final_rank = ach_result.get('rank') if ach_result and ach_result.get('rank') else student['title']
         
         # [操作ログ] 手動退室の詳細
-        app.logger.info(f"[操作ログ] 退室処理(手入力) - 生徒ID: {system_id}, 実行者IP: {request.remote_addr}")
+        log_suffix = " (オフライン同期)" if data.get('exit_time') else ""
+        app.logger.info(f"[操作ログ] 退室処理(手入力){log_suffix} - 生徒ID: {system_id}, 実行者IP: {request.remote_addr}")
 
         conn.commit()
         
@@ -417,7 +425,13 @@ def qr_process():
         #「今日」入室しているかどうかで分岐
         if is_present_today:
             # --- 退室処理 ---
-            exit_time_utc = datetime.datetime.now(UTC)
+            # クライアントから指定時刻があればそれを使用（オフライン同期用）
+            timestamp_str = data.get('timestamp')
+            if timestamp_str:
+                exit_time_utc = datetime.datetime.fromisoformat(timestamp_str).astimezone(UTC)
+            else:
+                exit_time_utc = datetime.datetime.now(UTC)
+
             log_id_to_update = student['current_log_id']
             # log_idがない場合はエラー（通常は起こらないはず）
             if not log_id_to_update: return jsonify({'status': 'error', 'message': '有効な退室記録が見つかりません。'}), 409
@@ -433,10 +447,17 @@ def qr_process():
             ach_result = _handle_notifications(conn, system_id, 'check_out', log_id_to_update)
             
             # [操作ログ] QR退室の詳細
-            app.logger.info(f"[操作ログ] 退室処理(QR) - 生徒ID: {system_id}")
+            log_suffix = " (オフライン同期)" if data.get('timestamp') else ""
+            app.logger.info(f"[操作ログ] 退室処理(QR){log_suffix} - 生徒ID: {system_id}")
         else:
             # --- 入室処理 ---
-            entry_time_utc = datetime.datetime.now(UTC)
+            # クライアントから指定時刻があればそれを使用（オフライン同期用）
+            timestamp_str = data.get('timestamp')
+            if timestamp_str:
+                entry_time_utc = datetime.datetime.fromisoformat(timestamp_str).astimezone(UTC)
+            else:
+                entry_time_utc = datetime.datetime.now(UTC)
+
             cursor = conn.execute('INSERT INTO attendance_logs (system_id, entry_time) VALUES (?, ?)', (system_id, entry_time_utc.isoformat()))
             new_log_id = cursor.lastrowid
             conn.execute('UPDATE students SET is_present = 1, current_log_id = ? WHERE system_id = ?', (new_log_id, system_id))
@@ -444,7 +465,8 @@ def qr_process():
             ach_result = _handle_notifications(conn, system_id, 'check_in', new_log_id)
 
             # [操作ログ] QR入室の詳細 (QR入室時は座席指定なしのためNULL/None扱いです)
-            app.logger.info(f"[操作ログ] 入室処理(QR) - 生徒ID: {system_id}, 座席: 指定なし")
+            log_suffix = " (オフライン同期)" if data.get('timestamp') else ""
+            app.logger.info(f"[操作ログ] 入室処理(QR){log_suffix} - 生徒ID: {system_id}, 座席: 指定なし")
 
         # 最新の称号情報を決定
         # student変数はリセット時に再取得しないため、必要ならここで再取得
