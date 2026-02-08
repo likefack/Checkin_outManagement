@@ -513,39 +513,135 @@ function renderActionButton(type) {
     dom.actionButtonContainer.appendChild(button);
 }
 function renderAttendanceTable() {
-    dom.attendanceTableBody.innerHTML = ''; 
+    // 表示対象リストのフィルタリング
     const list = APP_MODE === 'students' ? currentAttendees.filter(s => s.seat_number) : currentAttendees;
+
+    // 1. データがない場合の表示処理
     if (list.length === 0) {
+        dom.attendanceTableBody.innerHTML = '';
         const row = dom.attendanceTableBody.insertRow();
         const cell = row.insertCell();
         cell.colSpan = 9;
         cell.textContent = "本日、まだ入室者はいません。";
         cell.style.textAlign = 'center';
-    } else {
-        list.forEach((student, index) => {
-            const row = dom.attendanceTableBody.insertRow();
-            if(student.exit_time) row.classList.add('exited-row');
-            row.insertCell().textContent = index + 1;
-            const gradeNames = {1:'中1', 2:'中2', 3:'中3', 4:'高1', 5:'高2', 6:'高3'};
-            row.insertCell().textContent = gradeNames[student.grade] || student.grade;
-            row.insertCell().textContent = student.class;
-            row.insertCell().textContent = student.student_number;
-            row.insertCell().textContent = student.seat_number || 'QR';
-            row.insertCell().textContent = student.name;
-            row.insertCell().textContent = new Date(student.entry_time).toLocaleTimeString('ja-JP');
-            const durationCell = row.insertCell();
-            durationCell.dataset.entryTime = student.entry_time;
-            updateDuration(durationCell, student.exit_time);
-            const actionCell = row.insertCell();
-            actionCell.classList.add('action-cell');
-            if (student.exit_time) {
-                actionCell.textContent = new Date(student.exit_time).toLocaleTimeString('ja-JP');
-            } else {
-                 actionCell.innerHTML = `<button class="exit-list-btn" data-log-id="${student.log_id}" data-system-id="${student.system_id}">退室</button>`;
-            }
-        });
-        startDurationTimers();
+        return;
     }
+
+    // 「データなし」メッセージが表示されていたらクリア
+    if (dom.attendanceTableBody.rows.length === 1 && dom.attendanceTableBody.rows[0].cells.length === 1) {
+        dom.attendanceTableBody.innerHTML = '';
+    }
+
+    // 2. 削除されたデータの行をDOMから削除
+    // 表示すべきlog_idのセットを作成
+    const activeLogIds = new Set(list.map(s => s.log_id));
+    // 画面上の全行を確認し、リストにないものを削除
+    Array.from(dom.attendanceTableBody.rows).forEach(row => {
+        const rowLogId = parseInt(row.dataset.logId);
+        if (rowLogId && !activeLogIds.has(rowLogId)) {
+            row.remove();
+        }
+    });
+
+    // 3. リストデータに基づいて行を更新・作成（DOM再利用・差分更新）
+    list.forEach((student, index) => {
+        // 既存の行を探す
+        let row = dom.attendanceTableBody.querySelector(`tr[data-log-id="${student.log_id}"]`);
+        
+        // 新規行の作成
+        if (!row) {
+            row = dom.attendanceTableBody.insertRow();
+            row.dataset.logId = student.log_id;
+            // 9つのセルを作成
+            for (let i = 0; i < 9; i++) row.insertCell();
+        }
+
+        // --- 行スタイルの更新 ---
+        if (student.exit_time) {
+            if (!row.classList.contains('exited-row')) row.classList.add('exited-row');
+        } else {
+            if (row.classList.contains('exited-row')) row.classList.remove('exited-row');
+        }
+
+        const cells = row.cells;
+
+        // --- 各セルの内容更新（値が変わった場合のみ更新） ---
+        // 1. No
+        if (cells[0].textContent != index + 1) cells[0].textContent = index + 1;
+
+        // 2. 学年
+        const gradeNames = {1:'中1', 2:'中2', 3:'中3', 4:'高1', 5:'高2', 6:'高3'};
+        const gradeText = gradeNames[student.grade] || student.grade;
+        if (cells[1].textContent !== gradeText) cells[1].textContent = gradeText;
+
+        // 3. 組
+        if (cells[2].textContent != student.class) cells[2].textContent = student.class;
+        
+        // 4. 番号
+        if (cells[3].textContent != student.student_number) cells[3].textContent = student.student_number;
+        
+        // 5. 座席
+        const seatText = student.seat_number || 'QR';
+        if (cells[4].textContent !== seatText) cells[4].textContent = seatText;
+        
+        // 6. 氏名
+        if (cells[5].textContent !== student.name) cells[5].textContent = student.name;
+        
+        // 7. 入室時間
+        const entryTimeText = new Date(student.entry_time).toLocaleTimeString('ja-JP');
+        if (cells[6].textContent !== entryTimeText) cells[6].textContent = entryTimeText;
+
+        // 8. 滞在時間 (data属性と表示の更新)
+        const durationCell = cells[7];
+        // data属性の更新
+        if (durationCell.dataset.entryTime !== student.entry_time) {
+            durationCell.dataset.entryTime = student.entry_time;
+        }
+        if (student.exit_time) {
+            // 退室済みならdata-exit-timeを設定し、時間を固定表示
+            if (durationCell.dataset.exitTime !== student.exit_time) {
+                durationCell.dataset.exitTime = student.exit_time;
+                updateDuration(durationCell, student.exit_time);
+            }
+        } else {
+            // 在室中ならdata-exit-timeを削除
+            if (durationCell.dataset.exitTime) delete durationCell.dataset.exitTime;
+            // 初回表示時などで空の場合は計算して表示
+            if (!durationCell.textContent) updateDuration(durationCell);
+        }
+
+        // 9. 退室/アクションセル
+        const actionCell = cells[8];
+        if (!actionCell.classList.contains('action-cell')) actionCell.classList.add('action-cell');
+
+        if (student.exit_time) {
+            // 退室済み：時刻を表示
+            const exitTimeText = new Date(student.exit_time).toLocaleTimeString('ja-JP');
+            if (actionCell.textContent !== exitTimeText) {
+                actionCell.textContent = exitTimeText;
+            }
+        } else {
+            // 在室中
+            // 【重要】退室カウントダウン中かどうかを確認
+            if (exitTimers[student.log_id]) {
+                // カウントダウン中（退室処理中）なら、DOMを書き換えない！
+                // これにより「取消 (3s)」などの表示状態とイベントが維持される
+            } else {
+                // カウントダウン中でない場合
+                const btn = actionCell.querySelector('button');
+                // ボタンがない、または「取消」ボタンが残ってしまっている（状態不整合）場合は初期化
+                if (!btn || btn.classList.contains('undo-btn')) {
+                     actionCell.innerHTML = `<button class="exit-list-btn" data-log-id="${student.log_id}" data-system-id="${student.system_id}">退室</button>`;
+                } else {
+                    // 既に退室ボタンがあるなら、ID属性の念のための更新のみ
+                    if (btn.dataset.logId != student.log_id) btn.dataset.logId = student.log_id;
+                    if (btn.dataset.systemId != student.system_id) btn.dataset.systemId = student.system_id;
+                }
+            }
+        }
+    });
+
+    startDurationTimers();
 }
 function populateSelect(selectElement, optionsArray) { 
     optionsArray.forEach(item => {
