@@ -53,6 +53,7 @@ const dom = {
  * ページの初期化
  */
 async function initializeEditPage() {
+    setupSSE();
     setupEventListeners();
     flatpickr(dom.filterPeriod, { mode: "range", dateFormat: "Y-m-d", locale: "ja" });
 
@@ -444,5 +445,20 @@ function populateEditSeatSelect() {
         option.textContent = i;
         select.appendChild(option);
     }
+}
+
+/**
+ * SSE接続を設定し、更新通知を受け取ったらリストを再取得する
+ */
+function setupSSE() {
+    const eventSource = new EventSource('/api/stream');
+    
+    eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'update') {
+            console.log("更新通知を受信。編集画面のリストを更新します。");
+            fetchLogs();
+        }
+    };
 }
 

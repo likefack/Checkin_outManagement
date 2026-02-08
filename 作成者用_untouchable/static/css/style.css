@@ -48,7 +48,7 @@ body {
 main {
     flex-grow: 1;
     overflow-y: auto;
-    padding: 0 20px 20px 20px;
+    padding: 0 20px 5px 20px; /* 下部の余白を20pxから5pxに短縮してフッターとの隙間を詰める */
     min-height: 0;
 }
 
@@ -188,7 +188,8 @@ thead th {
 /* --- フッター (著作権表示) --- */
 .app-footer {
     text-align: center;
-    padding: 2px 0; /* 余白を最小限に */
+    padding: 0 0 2px 0; /* 上部の余白を0にし、下部のみわずかに確保 */
+    line-height: 1.2; /* 行間を詰めて文字上の余白を削減 */
     font-size: 0.6rem; /* 文字サイズを小さく (約10px) */
     color: #aaa; /* 目立たない色に */
     background-color: var(--secondary-color);

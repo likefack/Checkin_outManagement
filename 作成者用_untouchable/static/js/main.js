@@ -35,6 +35,7 @@ const dom = {
  * @description ページの初期化を行うメイン関数
  */
 function initializePage() {
+    setupSSE();
     updateTime();
     setInterval(updateTime, 1000);
     
@@ -750,4 +751,25 @@ function focusQrInput() {
     if (dom.qrInput && !isCalendarOpen) {
         dom.qrInput.focus();
     }
+}
+
+/**
+ * @function setupSSE
+ * @description サーバーからの更新通知を受け取るためのSSE接続を設定する
+ */
+function setupSSE() {
+    const eventSource = new EventSource('/api/stream');
+    
+    eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'update') {
+            console.log("更新通知を受信しました。リストを更新します。");
+            fetchInitialData();
+        }
+    };
+
+    eventSource.onerror = (err) => {
+        console.warn("SSE接続エラー (再接続を試みます):", err);
+        // EventSourceは自動で再接続するため、ここでは特別な処理は不要
+    };
 }

@@ -4,8 +4,10 @@ import datetime
 import pytz 
 import traceback
 import logging # 追加
+import queue
+import json
 from logging.handlers import RotatingFileHandler # 追加
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response
 from dotenv import load_dotenv
 import database
 from report_generator import create_report
@@ -15,6 +17,19 @@ from email_sender import send_email_async
 # --- アプリケーションの初期設定 ---
 dotenv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '管理者用_touchable', '.env')
 load_dotenv(dotenv_path)
+
+# SSE用: 接続中のクライアントキューを保持するリスト
+sse_clients = []
+
+def announce_update():
+    """全接続クライアントに更新通知を送る"""
+    msg = json.dumps({"type": "update"})
+    # リストのコピーを作成して反復処理（スレッドセーフ対策）
+    for q in sse_clients[:]:
+        try:
+            q.put(msg)
+        except Exception:
+            pass # エラー時は無視
 
 app = Flask(__name__, 
             template_folder=os.path.join(os.path.dirname(__file__), '..', 'templates'),
@@ -304,6 +319,9 @@ def check_in():
         app.logger.info(f"[操作ログ] 入室処理(手入力) - 生徒ID: {system_id}, 座席: {seat_number}, 実行者IP: {request.remote_addr}")
 
         conn.commit()
+        
+        # 他の端末へ更新を通知
+        announce_update()
 
         # `rank`キーに、上で決定した最新のランク情報(final_rank)を渡す
         # 【修正】リスト更新用のログデータを返却に追加
@@ -347,6 +365,9 @@ def check_out():
         app.logger.info(f"[操作ログ] 退室処理(手入力) - 生徒ID: {system_id}, 実行者IP: {request.remote_addr}")
 
         conn.commit()
+        
+        # 他の端末へ更新を通知
+        announce_update()
 
         # `rank`キーに、最新のランク情報(final_rank)を渡す
         # 【修正】リスト更新用のログデータを返却に追加
@@ -436,6 +457,9 @@ def qr_process():
         log_data = _get_log_details(conn, target_log_id)
 
         conn.commit()
+        
+        # 他の端末へ更新を通知
+        announce_update()
 
         return jsonify({'status': 'success', 'message': message, 'rank': final_rank, 'achievement': ach_result, 'log_data': log_data})
 
@@ -486,6 +510,10 @@ def exit_all():
             _handle_notifications(conn, student['system_id'], 'check_out', student['current_log_id'])
 
         conn.commit()
+        
+        # 他の端末へ更新を通知
+        announce_update()
+        
         return jsonify({'status': 'success', 'message': f'{len(present_students)}名の生徒を全員退室させました。'})
     except Exception as e:
         conn.rollback()
@@ -645,6 +673,10 @@ def add_log():
             conn.execute('UPDATE students SET is_present = 1, current_log_id = ? WHERE system_id = ?', (new_log_id, system_id))
         
         conn.commit()
+        
+        # 他の端末へ更新を通知
+        announce_update()
+
         return jsonify({'status': 'success', 'message': '記録が正常に追加されました。'})
     except Exception as e:
         conn.rollback(); return jsonify({'status': 'error', 'message': f'データベースエラー: {e}'}), 500
@@ -681,6 +713,10 @@ def update_log(log_id):
             conn.execute('UPDATE students SET is_present = 1, current_log_id = ? WHERE system_id = ?', (log_id, system_id))
         
         conn.commit()
+        
+        # 他の端末へ更新を通知
+        announce_update()
+
         return jsonify({'status': 'success', 'message': f'ID: {log_id} の記録が正常に更新されました。'})
     except Exception as e:
         conn.rollback(); return jsonify({'status': 'error', 'message': f'データベースエラー: {e}'}), 500
@@ -697,11 +733,39 @@ def delete_log(log_id):
         conn.execute('UPDATE students SET is_present = 0, current_log_id = NULL WHERE current_log_id = ?', (log_id,))
         conn.execute('DELETE FROM attendance_logs WHERE id = ?', (log_id,))
         conn.commit()
+        
+        # 他の端末へ更新を通知
+        announce_update()
+
         return jsonify({'status': 'success', 'message': f'ID: {log_id} の記録が正常に削除されました。'})
     except Exception as e:
         conn.rollback(); return jsonify({'status': 'error', 'message': f'データベースエラー: {e}'}), 500
     finally:
         conn.close()
+
+# --- SSE用エンドポイント ---
+@app.route('/api/stream')
+def stream():
+    def event_stream():
+        q = queue.Queue()
+        sse_clients.append(q)
+        try:
+            while True:
+                # キューからメッセージを取得（タイムアウト付きでブロッキング）
+                # タイムアウトを設定することで、切断検知や定期的なKeep-Aliveが可能
+                try:
+                    msg = q.get(timeout=20)
+                    yield f"data: {msg}\n\n"
+                except queue.Empty:
+                    # タイムアウト時はコメント行を送って接続維持
+                    yield ": keep-alive\n\n"
+        except GeneratorExit:
+            sse_clients.remove(q)
+        except Exception:
+            if q in sse_clients:
+                sse_clients.remove(q)
+
+    return Response(event_stream(), mimetype='text/event-stream')
 
 # --- サーバーの起動 ---
 if __name__ == '__main__':
