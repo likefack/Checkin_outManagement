@@ -101,6 +101,9 @@ async function fetchInitialData() {
         // 【追加】取得成功時にローカルストレージに最新のマスタデータを保存
         localStorage.setItem('cachedStudentsData', JSON.stringify(studentsData));
         
+        // オフラインキューにある変更を適用して、UIの状態を最新にする
+        applyOfflineChanges();
+
         populateGradeSelect();
         renderAttendanceTable();
     } catch (error) {
@@ -115,6 +118,9 @@ async function fetchInitialData() {
             // ここでは「名簿（studentsData）」の復旧を優先し、入室者リストは空（または以前の状態）とします。
             // ※もし入室者リストもキャッシュしたい場合は同様にlocalStorageへ保存してください。
             
+            // オフラインキューにある変更を適用して、UIの状態を最新にする
+            applyOfflineChanges();
+
             populateGradeSelect();
             showToast("オフラインモード: 保存された名簿データを使用しています。");
         } else {
@@ -256,6 +262,8 @@ async function handleManualEntry() {
     // オフライン判定
     if (!navigator.onLine) {
         saveToOfflineQueue('check_in', payload, `${student.name}さんの入室を受け付けました (オフライン)`);
+        // 即座にUI上のステータスを更新する
+        student.is_present = true;
         return; // API通信は行わない
     }
 
@@ -323,6 +331,17 @@ async function handleQrInput(event) {
         payload.timestamp = new Date().toISOString();
         const studentName = findStudentNameBySystemId(normalizedId) || `ID:${normalizedId}`;
         saveToOfflineQueue('qr_process', payload, `${studentName}さんの入退室を受け付けました (オフライン)`);
+        
+        // 即座にUI上のステータスを更新する（トグル動作）
+        const sObj = findStudentObjectBySystemId(normalizedId);
+        if (sObj) {
+            if (sObj.is_present) {
+                sObj.is_present = false;
+                sObj.current_log_id = null;
+            } else {
+                sObj.is_present = true;
+            }
+        }
         return;
     }
 
@@ -403,6 +422,13 @@ async function finalizeExit(logId, systemId, exitTime) {
         // 退室時はstudentオブジェクトが直接参照できないため、IDから名前を探すヘルパーを利用
         const studentName = findStudentNameBySystemId(systemId) || "退室";
         saveToOfflineQueue('check_out', payload, `${studentName}さんの退室を受け付けました (オフライン)`);
+
+        // 即座にUI上のステータスを更新する
+        const sObj = findStudentObjectBySystemId(systemId);
+        if (sObj) {
+            sObj.is_present = false;
+            sObj.current_log_id = null;
+        }
 
         // 【修正】オフライン時はボタンの表示を「同期待ち」に変更し、操作を無効化する
         // これにより「取消 (1s)」などの表示で止まってしまうのを防ぐ
@@ -932,9 +958,16 @@ async function processOfflineQueue() {
                 offlineQueue.shift(); // 先頭（一番古いもの）を削除
                 localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
                 successCount++;
+            } else if (response.status === 409) {
+                // 【追加】409 Conflict（既に処理済みなど）の場合も、キューから削除して進行させる
+                console.warn('同期スキップ: 既にサーバー側で処理済みです (409 Conflict)');
+                offlineQueue.shift();
+                localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
+                // 成功カウントには含めないが、処理は継続する
             } else {
                 console.error('同期エラー: サーバーがエラーを返しました', await response.text());
-                // エラー内容によっては中断すべきだが、とりあえず次の処理へ
+                // その他のエラー（500等）の場合はキューに残して、次のアイテムへ進むか判断する
+                // ここでは安全のため中断せず、次のアイテムの処理を試みる
             }
         } catch (error) {
             console.error('同期通信エラー:', error);
@@ -969,4 +1002,62 @@ function setupSSE() {
         console.warn("SSE接続エラー (再接続を試みます):", err);
         // EventSourceは自動で再接続するため、ここでは特別な処理は不要
     };
+}
+
+/**
+ * IDから生徒オブジェクトそのものを検索するヘルパー関数
+ */
+function findStudentObjectBySystemId(systemId) {
+    for (const grade in studentsData) {
+        for (const cls in studentsData[grade]) {
+            for (const num in studentsData[grade][cls]) {
+                const s = studentsData[grade][cls][num];
+                if (String(s.system_id) === String(systemId)) {
+                    return s;
+                }
+            }
+        }
+    }
+    return null;
+}
+
+/**
+ * オフラインキューにある操作を現在のstudentsDataに適用し、
+ * 最新のステータス（在室/退室）をシミュレーションする関数
+ */
+function applyOfflineChanges() {
+    if (!offlineQueue || offlineQueue.length === 0) return;
+    
+    offlineQueue.forEach(item => {
+        let sysId = null;
+        let type = null; // 'in' or 'out'
+
+        if (item.action === 'check_in') {
+            sysId = item.payload.system_id;
+            type = 'in';
+        } else if (item.action === 'check_out') {
+            sysId = item.payload.system_id;
+            type = 'out';
+        } else if (item.action === 'qr_process') {
+            sysId = item.payload.system_id;
+            // QRの場合はその時点でのステータスを反転させる必要がある
+            const s = findStudentObjectBySystemId(sysId);
+            if (s) {
+               if (s.is_present) type = 'out';
+               else type = 'in';
+            }
+        }
+
+        if (sysId) {
+            const s = findStudentObjectBySystemId(sysId);
+            if (s) {
+                if (type === 'in') {
+                    s.is_present = true;
+                } else if (type === 'out') {
+                    s.is_present = false;
+                    s.current_log_id = null;
+                }
+            }
+        }
+    });
 }

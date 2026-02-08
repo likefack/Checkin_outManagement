@@ -89,7 +89,9 @@ UTC = pytz.utc
 
 # --- データベース接続 ---
 def get_db_connection():
-    conn = sqlite3.connect(database.DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
+    # タイムアウトを10秒に設定（デフォルトは5秒）。
+    # これにより、複数端末から一斉にアクセスがあっても、ロックが解除されるのを長く待機でき、エラーになりにくくなる。
+    conn = sqlite3.connect(database.DB_PATH, timeout=10, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -190,11 +192,12 @@ with app.app_context():
 def index():
     mode = request.args.get('mode', 'students')
     app_name = os.getenv('APP_NAME', '入退室管理システム')
+    org_name_eng = os.getenv('ORGANIZATION_NAME_ENG', 'Codeswitcher Co.,Ltd.')
     if mode == 'edit':
-        return render_template('edit.html', app_name=app_name)
+        return render_template('edit.html', app_name=app_name, org_name_eng=org_name_eng)
     else:
         max_seat_number = int(os.getenv('MAX_SEAT_NUMBER', 72))
-        return render_template('index.html', mode=mode, app_name=app_name, max_seat_number=max_seat_number)
+        return render_template('index.html', mode=mode, app_name=app_name, max_seat_number=max_seat_number, org_name_eng=org_name_eng)
 
 # --- API ---
 @app.route('/api/initial_data')
@@ -297,9 +300,30 @@ def check_in():
 
         #今日の記録があるかで分岐 
         if is_present_today:
-            # 既に今日入室済みの場合 (手動入室ではエラーとする)
-            conn.close() # エラーを返す前にコネクションを閉じる
-            return jsonify({'status': 'error', 'message': f'{student["name"]}さんは本日既に入室済みです。'}), 409
+            # 既に今日入室済みの場合、時刻を確認して「より早い時刻」なら更新する（挙動の合理化）
+            current_log_id = student['current_log_id']
+            # クライアントからの指定時刻
+            entry_time_str = data.get('entry_time')
+            
+            updated = False
+            if entry_time_str:
+                new_entry_time_utc = datetime.datetime.fromisoformat(entry_time_str).astimezone(UTC)
+                # DB上の既存時刻
+                current_log = conn.execute('SELECT entry_time FROM attendance_logs WHERE id = ?', (current_log_id,)).fetchone()
+                current_entry_time_utc = datetime.datetime.fromisoformat(current_log['entry_time']).astimezone(UTC)
+
+                # 新しいリクエストの方が過去（古い）なら、開始時刻を修正する
+                if new_entry_time_utc < current_entry_time_utc:
+                    conn.execute('UPDATE attendance_logs SET entry_time = ? WHERE id = ?', (new_entry_time_utc.isoformat(), current_log_id))
+                    app.logger.info(f"ID:{system_id} の入室時刻をより早い時刻に修正しました ({current_entry_time_utc} -> {new_entry_time_utc})")
+                    updated = True
+
+            # エラー(409)ではなく成功(200)を返し、クライアント側のキューを消化させる
+            # ログデータ取得のためにIDをセット
+            new_log_id = current_log_id
+            ach_result = None # 重複時は通知しない
+            msg = f'{student["name"]}さんの入室時刻を修正しました。' if updated else f'{student["name"]}さんは既に入室済みです。'
+            
         else:
             # --- 入室処理 ---
             # クライアントから指定時刻があればそれを使用（オフライン同期用）、なければ現在時刻
@@ -311,10 +335,21 @@ def check_in():
 
             cursor = conn.execute('INSERT INTO attendance_logs (system_id, seat_number, entry_time) VALUES (?, ?, ?)', (system_id, seat_number, entry_time_utc.isoformat()))
             new_log_id = cursor.lastrowid
-            conn.execute('UPDATE students SET is_present = 1, current_log_id = ? WHERE system_id = ?', (new_log_id, system_id))
-        
-        # 実績判定処理を呼び出す
-        ach_result = _handle_notifications(conn, system_id, 'check_in', new_log_id)
+            
+            # 【追加】日付チェック：現在の日付（JST）とリクエストの日付（JST）が一致する場合のみ在室フラグを立てる
+            # JSTタイムゾーンを定義（UTC+9）
+            JST = datetime.timezone(datetime.timedelta(hours=9))
+            entry_date_jst = entry_time_utc.astimezone(JST).date()
+            current_date_jst = datetime.datetime.now(JST).date()
+
+            if entry_date_jst == current_date_jst:
+                conn.execute('UPDATE students SET is_present = 1, current_log_id = ? WHERE system_id = ?', (new_log_id, system_id))
+            else:
+                app.logger.info(f"日付不一致のため在室フラグ更新をスキップ: ID={system_id}, EntryDate={entry_date_jst}, Today={current_date_jst}")
+
+            # 実績判定処理を呼び出す
+            ach_result = _handle_notifications(conn, system_id, 'check_in', new_log_id)
+            msg = f'{student["name"]}さんが入室しました。'
         
         # 最終的に通知に使うランクを決定する。
         # もし実績（ach_result）の中に新しいランク情報があればそれを優先し、
@@ -333,7 +368,8 @@ def check_in():
         # `rank`キーに、上で決定した最新のランク情報(final_rank)を渡す
         # 【修正】リスト更新用のログデータを返却に追加
         log_data = _get_log_details(conn, new_log_id)
-        return jsonify({'status': 'success', 'message': f'{student["name"]}さんが入室しました。', 'rank': final_rank, 'achievement': ach_result, 'log_data': log_data})
+        # msg変数はif/elseブロック内で定義済み
+        return jsonify({'status': 'success', 'message': msg, 'rank': final_rank, 'achievement': ach_result, 'log_data': log_data})
 
     except Exception as e:
         conn.rollback(); return jsonify({'status': 'error', 'message': f'データベースエラー: {e}'}), 500
@@ -357,7 +393,17 @@ def check_out():
         if not log_id_to_update: return jsonify({'status': 'error', 'message': '有効な退室記録が見つかりません。'}), 409
         log_to_exit = conn.execute('SELECT exit_time FROM attendance_logs WHERE id = ?', (log_id_to_update,)).fetchone()
         if not log_to_exit: return jsonify({'status': 'error', 'message': f'内部エラー: ログID {log_id_to_update} が見つかりません。'}), 500
-        if log_to_exit['exit_time']: return jsonify({'status': 'error', 'message': '既に退室処理済みです。'}), 409
+        
+        # 既に退室済みの場合
+        if log_to_exit['exit_time']:
+            # エラー(409)ではなく成功(200)を返し、キューを消化させる
+            msg = '既に退室処理済みです。'
+            ach_result = None
+            final_rank = student['title']
+            # ログデータ取得
+            log_data = _get_log_details(conn, log_id_to_update)
+            return jsonify({'status': 'success', 'message': msg, 'rank': final_rank, 'achievement': ach_result, 'log_data': log_data})
+            
         exit_time_utc = datetime.datetime.fromisoformat(exit_time_str).astimezone(UTC) if exit_time_str else datetime.datetime.now(UTC)
         conn.execute('UPDATE attendance_logs SET exit_time = ? WHERE id = ?', (exit_time_utc.isoformat(), log_id_to_update))
         conn.execute('UPDATE students SET is_present = 0, current_log_id = NULL WHERE system_id = ?', (system_id,))
