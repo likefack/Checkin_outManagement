@@ -29,7 +29,12 @@ const dom = {
     exitAllBtn: document.getElementById('exit-all-btn'),
     createReportBtn: document.getElementById('create-report-btn'),
     reportPeriodInput: document.getElementById('report-period'),
-    toastContainer: document.getElementById('toast-container')
+    toastContainer: document.getElementById('toast-container'),
+    openCameraBtn: document.getElementById('open-camera-btn'),
+    cameraModal: document.getElementById('camera-modal'),
+    cameraVideo: document.getElementById('camera-video'),
+    cameraCanvas: document.getElementById('camera-canvas'),
+    closeCameraBtn: document.getElementById('close-camera-btn')
 };
 
 /**
@@ -177,6 +182,13 @@ function setupEventListeners() {
         dom.exitAllBtn.addEventListener('click', handleExitAll);
         dom.createReportBtn.addEventListener('click', handleCreateReport);
     }
+
+    if (dom.openCameraBtn) {
+        dom.openCameraBtn.addEventListener('click', openCamera);
+    }
+    if (dom.closeCameraBtn) {
+        dom.closeCameraBtn.addEventListener('click', closeCamera);
+    }
 }
 
 // --- 入退室処理 ---
@@ -299,24 +311,23 @@ async function handleManualExit() {
 }
 
 async function handleQrInput(event) {
-    // イベント種別判定は呼び出し元(processInput)で行うため削除
-
-    // 入力値を取得
     const rawId = event.target.value;
-    if (!rawId) return; // 空の場合は無視
+    if (!rawId) return;
+    event.target.value = ''; 
+    await processQrId(rawId);
+}
 
+/**
+ * QRコードの文字列（ID）を受け取り、入退室処理を行う共通ロジック
+ */
+async function processQrId(rawId) {
     const normalizedId = normalizeSystemId(rawId);
     
-    // 正規化後に7桁の数字になっているかチェック
     if (!/^\d{7}$/.test(normalizedId)) {
-        // デバッグ用にどのような変換結果になったかも含めて表示(運用開始後は削除しても可)
         showToast(`無効なID形式です。(認識結果: ${normalizedId || '解析不能'})`);
-        event.target.value = '';
         return;
     }
 
-    event.target.value = ''; 
-    // 【修正】QR読み取り時も即座に画面の選択状態をリセットする
     resetAllSelectors();
 
     if (normalizedId === lastScannedId) return; 
@@ -325,14 +336,11 @@ async function handleQrInput(event) {
 
     const payload = { system_id: normalizedId };
 
-    // オフライン判定
     if (!navigator.onLine) {
-        // 時刻情報を付与して保存（フェーズ1のサーバー修正でこれを受け取る）
         payload.timestamp = new Date().toISOString();
         const studentName = findStudentNameBySystemId(normalizedId) || `ID:${normalizedId}`;
         saveToOfflineQueue('qr_process', payload, `${studentName}さんの入退室を受け付けました (オフライン)`);
         
-        // 即座にUI上のステータスを更新する（トグル動作）
         const sObj = findStudentObjectBySystemId(normalizedId);
         if (sObj) {
             if (sObj.is_present) {
@@ -1060,4 +1068,79 @@ function applyOfflineChanges() {
             }
         }
     });
+}
+
+// --- カメラ/QRスキャン関連ロジック ---
+
+let videoStream = null;
+let animationFrameId = null;
+
+async function openCamera() {
+    try {
+        const constraints = {
+            video: { facingMode: "environment" } // 背面カメラを優先
+        };
+        videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+        dom.cameraVideo.srcObject = videoStream;
+        dom.cameraVideo.setAttribute("playsinline", true);
+        
+        // 映像の準備が整ってから表示するように変更
+        dom.cameraVideo.onloadeddata = () => {
+            dom.cameraModal.style.display = 'flex';
+            animationFrameId = requestAnimationFrame(tick);
+        };
+        
+        dom.cameraVideo.play();
+    } catch (err) {
+        console.error("カメラの起動に失敗しました:", err);
+        showToast("カメラを起動できませんでした。ブラウザの権限設定を確認してください。");
+    }
+}
+
+function closeCamera() {
+    if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+        videoStream = null;
+    }
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+    }
+    dom.cameraModal.style.display = 'none';
+}
+
+/**
+ * 毎フレームの解析ループ
+ */
+function tick() {
+    if (dom.cameraVideo.readyState === dom.cameraVideo.HAVE_ENOUGH_DATA) {
+        const canvas = dom.cameraCanvas;
+        const video = dom.cameraVideo;
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+
+        canvas.height = video.videoHeight;
+        canvas.width = video.videoWidth;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: "dontInvert",
+        });
+
+        if (code) {
+            console.log("QRコードを検出:", code.data);
+            // 検出成功時の処理を実行（モーダルは閉じない）
+            processQrId(code.data);
+            
+            // 連続スキャン時に画面が固まったように見えないよう、
+            // 検出直後に少し待機してから次のフレームを要求する（約1秒の間隔を空ける）
+            setTimeout(() => {
+                if (videoStream) {
+                    animationFrameId = requestAnimationFrame(tick);
+                }
+            }, 2000);
+            return; 
+        }
+    }
+    animationFrameId = requestAnimationFrame(tick);
 }
