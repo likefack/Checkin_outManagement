@@ -838,7 +838,8 @@ def stream():
 # --- サーバーの起動 ---
 if __name__ == '__main__':
     # 証明書ファイルのパスを定義
-    cert_path = os.path.join(os.path.dirname(__file__), '..', 'certs', 'cert.pem')
+    # 【修正】読み込む証明書名を cert.crt に変更
+    cert_path = os.path.join(os.path.dirname(__file__), '..', 'certs', 'cert.crt')
     key_path = os.path.join(os.path.dirname(__file__), '..', 'certs', 'key.pem')
 
     # 証明書と秘密鍵の両方が存在するかチェック

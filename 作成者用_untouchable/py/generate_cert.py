@@ -20,7 +20,8 @@ SERVER_IP = os.getenv("SERVER_IP")
 print(f"DEBUG: os.getenv(\"SERVER_IP\") の結果: {SERVER_IP}")
 
 
-CERT_FILE = "cert.pem"
+# 【修正】Windowsでインストールしやすいよう拡張子を .crt に変更
+CERT_FILE = "cert.crt"
 KEY_FILE = "key.pem"
 CERT_DIR = "certs" # 相対的なフォルダ名
 
@@ -78,7 +79,7 @@ def generate_self_signed_cert():
 
     cert.add_extensions([
         crypto.X509Extension(
-            b"subjectAltName", False, f"IP:{SERVER_IP}".encode()
+            b"subjectAltName", False, f"IP:{SERVER_IP}, IP:127.0.0.1".encode()
         )
     ])
 
