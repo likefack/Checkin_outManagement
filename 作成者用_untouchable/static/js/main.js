@@ -403,6 +403,19 @@ async function finalizeExit(logId, systemId, exitTime) {
         // 退室時はstudentオブジェクトが直接参照できないため、IDから名前を探すヘルパーを利用
         const studentName = findStudentNameBySystemId(systemId) || "退室";
         saveToOfflineQueue('check_out', payload, `${studentName}さんの退室を受け付けました (オフライン)`);
+
+        // 【修正】オフライン時はボタンの表示を「同期待ち」に変更し、操作を無効化する
+        // これにより「取消 (1s)」などの表示で止まってしまうのを防ぐ
+        const row = dom.attendanceTableBody.querySelector(`tr[data-log-id="${logId}"]`);
+        if (row) {
+            const btn = row.querySelector('button');
+            if (btn) {
+                btn.textContent = '同期待ち';
+                btn.disabled = true;
+                btn.classList.remove('undo-btn'); // 黄色のスタイルを解除
+                btn.style.opacity = '0.7';        // 無効化を視覚的に表現
+            }
+        }
         return;
     }
 
@@ -854,11 +867,23 @@ function saveToOfflineQueue(actionType, payload, toastMessage = null) {
     // 現在時刻を記録（サーバー送信時に使用）
     // 手動入退室ではすでにpayloadに時刻が含まれる場合があるが、
     // QR処理などのためにここで一律付与または確認する
-    if (!payload.timestamp && !payload.entry_time && !payload.exit_time) {
-        payload.timestamp = new Date().toISOString();
-    } else if (actionType === 'check_in' && !payload.entry_time) {
-         // 手動入室用にentry_timeキーで保存
-         payload.entry_time = new Date().toISOString();
+    
+    // 修正: 条件分岐を見直し、アクションタイプに応じて適切なキーで時刻を保存する
+    if (actionType === 'check_in') {
+        // 手動入室: entry_timeが必要
+        if (!payload.entry_time) {
+            payload.entry_time = new Date().toISOString();
+        }
+    } else if (actionType === 'check_out') {
+        // 手動退室: exit_timeが必要
+        if (!payload.exit_time) {
+            payload.exit_time = new Date().toISOString();
+        }
+    } else {
+        // QR処理など (actionType === 'qr_process'): timestampが必要
+        if (!payload.timestamp && !payload.entry_time && !payload.exit_time) {
+            payload.timestamp = new Date().toISOString();
+        }
     }
 
     const item = {
