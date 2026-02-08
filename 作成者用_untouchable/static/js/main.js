@@ -636,7 +636,8 @@ function renderActionButton(type) {
 }
 function renderAttendanceTable() {
     // 表示対象リストのフィルタリング
-    const list = APP_MODE === 'students' ? currentAttendees.filter(s => s.seat_number) : currentAttendees;
+    // adminモードまたはscannerモードの場合は全リストを表示し、それ以外（studentsモード）は手動入室者のみ表示
+    const list = (APP_MODE === 'admin' || APP_MODE === 'scanner') ? currentAttendees : currentAttendees.filter(s => s.seat_number);
 
     // 1. データがない場合の表示処理
     if (list.length === 0) {

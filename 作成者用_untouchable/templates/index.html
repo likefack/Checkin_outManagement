@@ -69,9 +69,11 @@
             {% if mode == 'admin' %}
                 <h2>本日の入室者リスト</h2>
                 <button id="exit-all-btn" class="danger-btn">全員退室</button>
+            {% elif mode == 'scanner' %}
+                <h2>本日の入室者リスト</h2>
+                <button id="open-camera-btn" class="header-btn" style="margin-left: auto;">QRスキャン</button>
             {% else %}
                 <h2>手動入室者リスト</h2>
-                <button id="open-camera-btn" class="header-btn" style="margin-left: auto;">QRスキャン</button>
             {% endif %}
         </div>
     </header>
@@ -147,22 +149,31 @@
                 const userAgent = navigator.userAgent || navigator.vendor || window.opera;
                 const urlParams = new URLSearchParams(window.location.search);
                 const mode = urlParams.get('mode');
+                
+                // PWA（ホーム画面から）起動されたかどうかを判定
+                const isPWA = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
 
-                // --- 新しい判定ロジック ---
-                // 1. 従来のiPhone/iPod判定
+                // URLにモードが指定されている場合は、そのモードを「お気に入り」として保存
+                if (mode) {
+                    localStorage.setItem('preferred_mode', mode);
+                } 
+                // モード指定がない（PWA起動など）かつ、過去に保存されたモードがある場合は復元
+                else if (isPWA) {
+                    const savedMode = localStorage.getItem('preferred_mode');
+                    if (savedMode && savedMode !== 'students') {
+                        window.location.href = '/?mode=' + savedMode;
+                        return;
+                    }
+                }
+
                 const isIOS = /iPhone|iPod/.test(userAgent) && !window.MSStream;
-                // 2. Macを名乗るがタッチ操作可能なデバイス（= iPad）の判定
                 const isIPad = (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 0) || /iPad/.test(userAgent);
 
-                // iPad, iPhone, iPodのいずれかで、かつURLにmodeが指定されていない場合
                 if ((isIOS || isIPad) && !mode) {
                     console.log("iOS/iPadOS device detected. Staying in students mode.");
-                    // 何もしない（デフォルトのstudentsモード）
                 } 
-                // それ以外のデバイスで、現在adminモードでない場合
-                else if (mode !== 'admin') {
+                else if (mode !== 'admin' && mode !== 'scanner') {
                     console.log("PC device detected. Redirecting to admin mode.");
-                    // adminモードにリダイレクト
                     window.location.href = '/?mode=admin';
                 }
             });
