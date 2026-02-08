@@ -108,7 +108,7 @@ def generate_self_signed_cert():
         print("="*60)
         return # エラーがあったらここで終了
 
-    print("サーバーを再起動してください。")
+    print("サーバーを再起動してください。必要があれば[Windows]キー + [R] を押し、certmgr.msc と入力して古い証明書を削除してください。")
 
 if __name__ == '__main__':
     try:
