@@ -26,3 +26,4 @@ server_*.log.*
 questions.db
 管理者用_touchable/質問履歴/質問履歴_for_import.csv
 管理者用_touchable/質問履歴/質問履歴.xlsx
+管理者用_touchable/質問画像/*_image.jpg
