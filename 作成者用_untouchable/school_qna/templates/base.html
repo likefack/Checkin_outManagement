@@ -67,10 +67,6 @@
         
         <div class="sidebar-status-card">
             <div class="status-item">
-                <span class="status-label">現在のモード:</span>
-                <span class="status-value mode-badge" id="sidebar-mode-display">質問受付</span>
-            </div>
-            <div class="status-item">
                 <span class="status-label">ネットワーク:</span>
                 <span class="status-value" id="sidebar-network-status"><span class="status-dot"></span> <span id="network-text">判定中</span></span>
             </div>
@@ -84,10 +80,10 @@
             <ul>
                 <li>
                     <a href="/">入退室管理システム</a>
-                    <ul class="sidebar-sub-nav" style="margin-left: 15px; font-size: 0.85em; opacity: 0.8;">
-                        <li><a href="/?mode=students" style="color: #666;">通常モード (生徒用)</a></li>
-                        <li><a href="/?mode=scanner" style="color: #666;">スキャナーモード</a></li>
-                        <li><a href="/?mode=admin" style="color: #666;">管理者モード</a></li>
+                    <ul class="sidebar-sub-nav">
+                        <li><a href="/?mode=students">通常モード (生徒用)</a></li>
+                        <li><a href="/?mode=scanner">スキャナーモード</a></li>
+                        <li><a href="/?mode=admin">管理者モード</a></li>
                     </ul>
                 </li>
                 <li><a href="{{ url_for('school_qna.index') }}" class="active">質問管理システム</a></li>

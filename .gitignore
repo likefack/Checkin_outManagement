@@ -22,3 +22,5 @@ server_*.log.*
 管理者用_touchable/server_logs/.__server_*.lock
 作成者用_untouchable/school_qna/static/sounds/notification.m4a
 管理者用_touchable/質問内容と小区分の編集.xlsx
+作成者用_untouchable/school_qna/questions.db
+questions.db

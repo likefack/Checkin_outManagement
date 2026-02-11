@@ -16,13 +16,17 @@ function handleFormResetLogic() {
     }
 }
 
-// ★★★ ここからが修正箇所 ★★★
 // 【追加】サイドバー制御
 document.addEventListener('DOMContentLoaded', function() {
     const sidebar = document.getElementById('sidebar');
     const sidebarOverlay = document.getElementById('sidebar-overlay');
     const sidebarToggle = document.getElementById('sidebar-toggle');
     const sidebarClose = document.getElementById('sidebar-close');
+
+    // ステータス表示要素の取得
+    const networkStatus = document.getElementById('sidebar-network-status');
+    const networkText = document.getElementById('network-text');
+    const serverStatus = document.getElementById('sidebar-server-status');
 
     function openSidebar() {
         if(sidebar) sidebar.classList.add('active');
@@ -33,9 +37,61 @@ document.addEventListener('DOMContentLoaded', function() {
         if(sidebarOverlay) sidebarOverlay.classList.remove('active');
     }
 
+    // ネットワーク状態（ブラウザの接続性）の更新
+    function updateNetworkStatusUI() {
+        if (!networkStatus || !networkText) return;
+        const isOnline = navigator.onLine;
+        const dot = networkStatus.querySelector('.status-dot');
+        if (isOnline) {
+            if(dot) dot.className = 'status-dot green';
+            networkText.textContent = 'オンライン';
+        } else {
+            if(dot) dot.className = 'status-dot red';
+            networkText.textContent = 'オフライン';
+        }
+    }
+
+    // サーバー通信状態のチェック（メインアプリのロジックを流用）
+    async function checkServerHealth() {
+        if (!serverStatus) return;
+        if (!navigator.onLine) {
+            serverStatus.textContent = '通信不可';
+            serverStatus.style.color = '#d9534f';
+            return;
+        }
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
+            // サーバーの応答を確認
+            const res = await fetch('/api/settings', { method: 'GET', signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (res.ok) {
+                serverStatus.textContent = '正常';
+                serverStatus.style.color = '#28a745';
+            } else {
+                throw new Error();
+            }
+        } catch (e) {
+            serverStatus.textContent = 'エラー';
+            serverStatus.style.color = '#d9534f';
+        }
+    }
+
     if(sidebarToggle) sidebarToggle.addEventListener('click', openSidebar);
     if(sidebarClose) sidebarClose.addEventListener('click', closeSidebar);
     if(sidebarOverlay) sidebarOverlay.addEventListener('click', closeSidebar);
+
+    // ステータス監視の初期化
+    updateNetworkStatusUI();
+    checkServerHealth();
+
+    // イベントリスナーと定期実行の設定
+    window.addEventListener('online', () => {
+        updateNetworkStatusUI();
+        checkServerHealth();
+    });
+    window.addEventListener('offline', updateNetworkStatusUI);
+    setInterval(checkServerHealth, 30000); // 30秒ごとにチェック
 });
 
 // --- 音声再生のグローバル管理 ---
