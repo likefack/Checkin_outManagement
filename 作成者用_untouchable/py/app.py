@@ -123,6 +123,11 @@ configure_logging(app)
 JST = pytz.timezone('Asia/Tokyo')
 UTC = pytz.utc
 
+# --- テーマカラーの注入 ---
+@app.context_processor
+def inject_theme_color():
+    return dict(theme_color=os.getenv('THEME_COLOR', '#4a90e2'))
+
 # --- データベース接続 ---
 def get_db_connection():
     # タイムアウトを10秒に設定（デフォルトは5秒）。
@@ -652,7 +657,7 @@ def handle_create_report():
 @app.route('/api/settings', methods=['GET', 'POST'])
 def manage_settings():
     # 編集を許可するキーのリスト
-    ALLOWED_KEYS = ['APP_NAME', 'ORGANIZATION_NAME', 'ORGANIZATION_NAME_ENG', 'MAX_SEAT_NUMBER']
+    ALLOWED_KEYS = ['APP_NAME', 'ORGANIZATION_NAME', 'ORGANIZATION_NAME_ENG', 'MAX_SEAT_NUMBER', 'THEME_COLOR']
     
     if request.method == 'GET':
         settings = {key: os.getenv(key, '') for key in ALLOWED_KEYS}

@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>{% block title %}校内質問受付システム{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('school_qna.static', filename='css/style.css') }}">
+    <style>
+        :root {
+            --primary-color: {{ theme_color }};
+        }
+    </style>
 
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">

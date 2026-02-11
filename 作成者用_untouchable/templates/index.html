@@ -17,6 +17,11 @@
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        :root {
+            --primary-color: {{ theme_color }};
+        }
+    </style>
     
     <title>{{ app_name }}</title>
 </head>
@@ -151,6 +156,10 @@
                 <div class="form-group">
                     <label>最大座席数</label>
                     <input type="number" name="MAX_SEAT_NUMBER" placeholder="72">
+                </div>
+                <div class="form-group">
+                    <label>テーマカラー</label>
+                    <input type="color" name="THEME_COLOR" value="{{ theme_color }}">
                 </div>
                 <div class="modal-actions">
                     <button type="button" id="close-settings-btn">キャンセル</button>
