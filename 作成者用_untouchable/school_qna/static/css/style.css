@@ -77,6 +77,7 @@ button, .button {
     text-decoration: none; /* リンクボタン用 */
     display: inline-block; /* リンクボタン用 */
     text-align: center;
+    touch-action: manipulation; /* iPad等のダブルタップズーム判定を無効化して反応を速める */
 }
 
 button:hover, .button:hover {
@@ -292,7 +293,9 @@ th {
     height: 100%;
     background-color: #fff;
     box-shadow: 2px 0 5px rgba(0,0,0,0.2);
-    transition: left 0.3s ease;
+    transition: transform 0.3s ease; /* leftの代わりにtransformを使用 */
+    transform: translateX(0);
+    backface-visibility: hidden; /* チラつき防止とGPU加速の明示 */
     z-index: 3000;
     display: flex;
     flex-direction: column;

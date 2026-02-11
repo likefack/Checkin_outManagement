@@ -241,7 +241,6 @@ main {
     flex-grow: 1;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    will-change: transform;
     padding: 0 20px 5px 20px; /* 下部の余白を20pxから5pxに短縮してフッターとの隙間を詰める */
     min-height: 0;
 }

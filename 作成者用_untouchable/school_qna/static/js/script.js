@@ -348,11 +348,15 @@ document.addEventListener('DOMContentLoaded', function() {
     window.updatePendingCount(); 
     window.updateClock();        
     
-    // タイマーを1つに統合して負荷を軽減
+    // UIの時計のみ1秒ごとに更新
     setInterval(() => {
-        window.updatePendingCount();
         window.updateClock();
     }, 1000);
+
+    // 通信を伴う待機人数確認は、負荷軽減のため5秒ごとに変更
+    setInterval(() => {
+        window.updatePendingCount();
+    }, 5000);
 
     // --- 一覧画面の「済」チェックボックス用 ---
     document.querySelectorAll('.done-checkbox').forEach(checkbox => {
@@ -522,6 +526,6 @@ function initializeNotifier() {
             .catch(error => console.error('新着質問のチェック中にエラー:', error));
     };
 
-    // 1秒ごとに新着質問をチェック
-    window.notifierIntervalId = setInterval(checkForNewQuestions, 1000);
+    // 通信負荷を抑えるため、チェック間隔を5秒に変更
+    window.notifierIntervalId = setInterval(checkForNewQuestions, 5000);
 }
