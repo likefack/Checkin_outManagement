@@ -1058,6 +1058,7 @@ function renderAttendanceTable() {
         }
     });
 
+    // リスト描画後にキャッシュを再構築し、タイマーを開始
     startDurationTimers();
 }
 function populateSelect(selectElement, optionsArray) { 
@@ -1143,12 +1144,19 @@ function showToast(message, rank = null) {
     }, 5000);
 }
 let durationInterval = null;
+let activeDurationCells = [];
+
 function startDurationTimers() {
     if (durationInterval) clearInterval(durationInterval);
+    
+    // レンダリング直後のタイミングで、更新が必要なセル（在室中）をキャッシュする
+    activeDurationCells = Array.from(dom.attendanceTableBody.querySelectorAll('td[data-entry-time]'))
+                               .filter(cell => !cell.dataset.exitTime);
+
     durationInterval = setInterval(() => {
-        const durationCells = dom.attendanceTableBody.querySelectorAll('td[data-entry-time]');
-        durationCells.forEach(cell => {
-            if (!cell.dataset.exitTime) updateDuration(cell);
+        // キャッシュされた要素のみを更新し、毎秒のDOMクエリを回避する
+        activeDurationCells.forEach(cell => {
+            updateDuration(cell);
         });
     }, 1000);
 }
