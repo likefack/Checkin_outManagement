@@ -9,8 +9,14 @@ let currentAttendees = [];
 let isCalendarOpen = false;
 let lastScannedId = null; 
 const exitTimers = {}; // { log_id: timerId }
+// 通信タイムアウト設定 (ms)
+const FETCH_TIMEOUT_MS = 3000; // 3秒で諦めて保存
+const SLOW_REQUEST_NOTIFY_MS = 1500; // 1.5秒経過したら「通信中」と表示
+
 // オフライン送信待ちキュー（ローカルストレージから読み込み）
 let offlineQueue = JSON.parse(localStorage.getItem('offlineQueue')) || [];
+// 同期処理中かどうかのフラグ
+let isSyncing = false;
 
 // --- DOM要素の取得 ---
 const dom = {
@@ -60,6 +66,14 @@ function initializePage() {
     if (navigator.onLine && offlineQueue.length > 0) {
         processOfflineQueue();
     }
+
+    // 【追加】サーバー復帰監視：キューがある場合、5秒ごとに送信を試みる
+    setInterval(() => {
+        if (navigator.onLine && offlineQueue.length > 0 && !isSyncing) {
+            console.log("サーバー復帰確認のため、キューの同期を試みます...");
+            processOfflineQueue();
+        }
+    }, 1000);
 
     if (APP_MODE === 'admin') {
         flatpickr(dom.reportPeriodInput, {
@@ -282,21 +296,41 @@ async function handleManualEntry() {
         return; // API通信は行わない
     }
 
+    // タイムアウト用コントローラーと通知用タイマーのセット
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    const slowNotifyId = setTimeout(() => showToast("サーバーと通信中...しばらくお待ちください", null), SLOW_REQUEST_NOTIFY_MS);
+
     try {
         const response = await fetch('/api/check_in', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
+            signal: controller.signal // タイムアウト設定
         });
+        
+        // 成功したらタイマー解除
+        clearTimeout(timeoutId);
+        clearTimeout(slowNotifyId);
+
         // サーバーが500系エラーなどを返した場合も例外を投げてcatchブロックへ誘導する
         if (!response.ok && response.status >= 500) {
             throw new Error(`Server Error: ${response.status}`);
         }
         await processApiResponse(response);
     } catch (error) {
+        clearTimeout(timeoutId);
+        clearTimeout(slowNotifyId);
         console.error('入室処理エラー(通信不可):', error);
+        
+        const isTimeout = error.name === 'AbortError';
+        const errorMsg = isTimeout ? 'タイムアウト' : '通信エラー';
+
         // 通信エラーまたはサーバーエラー時は、オフラインキューに保存して後で再送する
-        saveToOfflineQueue('check_in', payload, `${student.name}さんの入室を保存しました (通信待機)`);
+        saveToOfflineQueue('check_in', payload, `${student.name}さんの入室を保存しました (${errorMsg})`);
+        
+        // 【重要】サーバーダウン時もローカルの状態を進める
+        student.is_present = true;
     }
 }
 
@@ -357,20 +391,46 @@ async function processQrId(rawId) {
         return;
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    const slowNotifyId = setTimeout(() => showToast("サーバーと通信中...しばらくお待ちください", null), SLOW_REQUEST_NOTIFY_MS);
+
     try {
         const response = await fetch('/api/qr_process', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
+            signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
+        clearTimeout(slowNotifyId);
+
         if (!response.ok && response.status >= 500) {
             throw new Error(`Server Error: ${response.status}`);
         }
         await processApiResponse(response);
     } catch (error) {
+        clearTimeout(timeoutId);
+        clearTimeout(slowNotifyId);
         console.error('QR処理エラー(通信不可):', error);
+
+        const isTimeout = error.name === 'AbortError';
+        const errorMsg = isTimeout ? 'タイムアウト' : '通信エラー';
+
         const studentName = findStudentNameBySystemId(normalizedId) || `ID:${normalizedId}`;
-        saveToOfflineQueue('qr_process', payload, `${studentName}さんの入退室を保存しました (通信待機)`);
+        saveToOfflineQueue('qr_process', payload, `${studentName}さんの入退室を保存しました (${errorMsg})`);
+
+        // 【重要】サーバーダウン時もローカルの状態を反転させる
+        const sObj = findStudentObjectBySystemId(normalizedId);
+        if (sObj) {
+            if (sObj.is_present) {
+                sObj.is_present = false;
+                sObj.current_log_id = null;
+            } else {
+                sObj.is_present = true;
+            }
+        }
     }
 }
 
@@ -457,21 +517,55 @@ async function finalizeExit(logId, systemId, exitTime) {
         return;
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    const slowNotifyId = setTimeout(() => showToast("サーバーと通信中...しばらくお待ちください", null), SLOW_REQUEST_NOTIFY_MS);
+
     try {
         const response = await fetch('/api/check_out', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
+            signal: controller.signal
         });
+        
+        clearTimeout(timeoutId);
+        clearTimeout(slowNotifyId);
+
         if (!response.ok && response.status >= 500) {
             throw new Error(`Server Error: ${response.status}`);
         }
         await processApiResponse(response);
     } catch (error) {
+        clearTimeout(timeoutId);
+        clearTimeout(slowNotifyId);
         console.error('退室処理エラー(通信不可):', error);
+        
+        const isTimeout = error.name === 'AbortError';
+        const errorMsg = isTimeout ? 'タイムアウト' : '通信エラー';
+
         // 名前解決を試みる
         const studentName = findStudentNameBySystemId(systemId) || "退室";
-        saveToOfflineQueue('check_out', payload, `${studentName}さんの退室を保存しました (通信待機)`);
+        saveToOfflineQueue('check_out', payload, `${studentName}さんの退室を保存しました (${errorMsg})`);
+
+        // 【重要】サーバーダウン時もローカルの状態を更新する
+        const sObj = findStudentObjectBySystemId(systemId);
+        if (sObj) {
+            sObj.is_present = false;
+            sObj.current_log_id = null;
+        }
+
+        // オフライン時と同様にボタンの表示を「同期待ち」に変更し、操作を無効化する
+        const row = dom.attendanceTableBody.querySelector(`tr[data-log-id="${logId}"]`);
+        if (row) {
+            const btn = row.querySelector('button');
+            if (btn) {
+                btn.textContent = '同期待ち';
+                btn.disabled = true;
+                btn.classList.remove('undo-btn');
+                btn.style.opacity = '0.7';
+            }
+        }
     }
 }
 
@@ -943,56 +1037,73 @@ function saveToOfflineQueue(actionType, payload, toastMessage = null) {
  * オフラインキューに溜まったデータを順次送信する
  */
 async function processOfflineQueue() {
-    if (offlineQueue.length === 0) return;
-    if (!navigator.onLine) return;
+    // 既に実行中、キューが空、またはオフラインの場合は何もしない
+    if (isSyncing || offlineQueue.length === 0 || !navigator.onLine) return;
 
-    console.log(`オフラインキューの同期を開始します (${offlineQueue.length}件)`);
-    showToast(`通信復帰: ${offlineQueue.length}件のデータを送信中...`);
+    isSyncing = true; // ロック開始
 
-    // 配列のコピーを作成して処理（処理成功したものから削除するため）
-    const queueToProcess = [...offlineQueue];
-    let successCount = 0;
+    try {
+        console.log(`オフラインキューの同期を開始します (${offlineQueue.length}件)`);
+        
+        // 初回のみトーストを出す（定期実行で毎回出るとうるさいため、consoleのみにするか、控えめな表示にする）
+        // ここでは通常通り表示しますが、必要に応じて調整してください
+        // showToast(`通信復帰: ${offlineQueue.length}件のデータを送信中...`); 
 
-    for (const item of queueToProcess) {
-        let url = '';
-        if (item.action === 'check_in') url = '/api/check_in';
-        else if (item.action === 'check_out') url = '/api/check_out';
-        else if (item.action === 'qr_process') url = '/api/qr_process';
+        // 配列のコピーを作成して処理（処理成功したものから削除するため）
+        const queueToProcess = [...offlineQueue];
+        let successCount = 0;
 
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(item.payload)
-            });
+        for (const item of queueToProcess) {
+            let url = '';
+            if (item.action === 'check_in') url = '/api/check_in';
+            else if (item.action === 'check_out') url = '/api/check_out';
+            else if (item.action === 'qr_process') url = '/api/qr_process';
 
-            if (response.ok) {
-                // 送信成功したらキューから削除
-                offlineQueue.shift(); // 先頭（一番古いもの）を削除
-                localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
-                successCount++;
-            } else if (response.status === 409) {
-                // 【追加】409 Conflict（既に処理済みなど）の場合も、キューから削除して進行させる
-                console.warn('同期スキップ: 既にサーバー側で処理済みです (409 Conflict)');
-                offlineQueue.shift();
-                localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
-                // 成功カウントには含めないが、処理は継続する
-            } else {
-                console.error('同期エラー: サーバーがエラーを返しました', await response.text());
-                // その他のエラー（500等）の場合はキューに残して、次のアイテムへ進むか判断する
-                // ここでは安全のため中断せず、次のアイテムの処理を試みる
+            // タイムアウト設定を追加（サーバーが応答しない場合に長時間ロックするのを防ぐ）
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(item.payload),
+                    signal: controller.signal // タイムアウト適用
+                });
+                clearTimeout(timeoutId);
+
+                if (response.ok) {
+                    // 送信成功したらキューから削除
+                    offlineQueue.shift(); // 先頭（一番古いもの）を削除
+                    localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
+                    successCount++;
+                } else if (response.status === 409) {
+                    console.warn('同期スキップ: 既にサーバー側で処理済みです (409 Conflict)');
+                    offlineQueue.shift();
+                    localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
+                } else {
+                    console.error('同期エラー: サーバーがエラーを返しました', response.status);
+                    // 500エラーなどの場合、サーバーは生きているが処理に失敗している可能性がある
+                    // この場合、キューを詰まらせないために次のアイテムへ進むか、
+                    // あるいはサーバー復旧待ちとしてループを抜けるか。
+                    // ここでは「サーバーダウン」の可能性が高いため、ループを抜けて次回の定期実行に委ねる
+                    break;
+                }
+            } catch (error) {
+                clearTimeout(timeoutId);
+                console.error('同期通信エラー:', error);
+                // 通信エラー（タイムアウトや切断）なら処理を中断して次回に持ち越し
+                break; 
             }
-        } catch (error) {
-            console.error('同期通信エラー:', error);
-            // 通信エラー（またオフラインになった等）なら処理を中断
-            break; 
         }
-    }
 
-    if (successCount > 0) {
-        showToast(`${successCount}件のデータを同期しました。`);
-        // リストを最新にする
-        fetchInitialData();
+        if (successCount > 0) {
+            showToast(`${successCount}件のデータを同期しました。`);
+            // リストを最新にする
+            fetchInitialData();
+        }
+    } finally {
+        isSyncing = false; // ロック解除（必ず実行）
     }
 }
 
