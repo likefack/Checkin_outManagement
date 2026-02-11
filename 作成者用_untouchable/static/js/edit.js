@@ -19,6 +19,19 @@ let currentSort = { column: 'id', direction: 'desc' };
 let totalLogsCount = 0;
 let entryTimePicker = null;
 let exitTimePicker = null;
+// 連続操作防止用フラグ
+let isNavigating = false; // ページ遷移中
+let isLoading = false;    // データ取得中
+let globalEventSource = null; // SSE接続管理用
+
+// ページ離脱時にリソースを解放する
+window.addEventListener('beforeunload', () => {
+    if (globalEventSource) {
+        globalEventSource.close();
+        globalEventSource = null;
+    }
+});
+
 // --- DOM要素の取得 ---
 const dom = {
     filterPeriod: document.getElementById('filter-period'),
@@ -71,6 +84,20 @@ async function initializeEditPage() {
     // 座席選択肢の生成
     populateEditSeatSelect();
 
+    // ヘッダーの「戻る」ボタンの制御
+    const backLink = document.getElementById('header-back-link');
+    if (backLink) {
+        backLink.addEventListener('click', (e) => {
+            if (isNavigating) {
+                e.preventDefault();
+                return;
+            }
+            isNavigating = true;
+            // 視覚的フィードバック（任意）
+            backLink.style.opacity = '0.5';
+        });
+    }
+
     await fetchLogs();
 }
 
@@ -96,6 +123,12 @@ function setupEventListeners() {
  * サーバーからログデータを取得して描画
  */
 async function fetchLogs() {
+    if (isLoading) return; // 既にロード中なら何もしない
+    isLoading = true;
+    
+    // UI操作を一時的に無効化（オプション）
+    dom.logsTableBody.style.opacity = '0.5';
+
     const params = new URLSearchParams({ page: currentPage, per_page: logsPerPage, sort: currentSort.column, dir: currentSort.direction });
     const period = dom.filterPeriod.value;
     // 日本語ロケールの区切り文字 " から " を使用
@@ -131,6 +164,9 @@ async function fetchLogs() {
     } catch (error) {
         console.error("ログの取得に失敗:", error);
         dom.logsTableBody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:red;">データの読み込みに失敗しました。</td></tr>`;
+    } finally {
+        isLoading = false;
+        dom.logsTableBody.style.opacity = '1';
     }
 }
 
@@ -322,6 +358,10 @@ async function handleFormSubmit(event) {
     const url = logId ? `/api/logs/${logId}` : '/api/logs';
     const method = logId ? 'PUT' : 'POST';
 
+    // 二重送信防止：ボタンを無効化
+    dom.modalSaveBtn.disabled = true;
+    dom.modalSaveBtn.textContent = '保存中...';
+
     try {
         const response = await fetch(url, {
             method: method,
@@ -336,6 +376,10 @@ async function handleFormSubmit(event) {
         }
     } catch (error) {
         alert("保存中にエラーが発生しました。");
+    } finally {
+        // ボタンを再度有効化
+        dom.modalSaveBtn.disabled = false;
+        dom.modalSaveBtn.textContent = '保存';
     }
 }
 
@@ -451,9 +495,12 @@ function populateEditSeatSelect() {
  * SSE接続を設定し、更新通知を受け取ったらリストを再取得する
  */
 function setupSSE() {
-    const eventSource = new EventSource('/api/stream');
+    if (globalEventSource) {
+        globalEventSource.close();
+    }
+    globalEventSource = new EventSource('/api/stream');
     
-    eventSource.onmessage = (event) => {
+    globalEventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'update') {
             console.log("更新通知を受信。編集画面のリストを更新します。");

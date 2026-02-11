@@ -10,6 +10,16 @@ let isCalendarOpen = false;
 let originalThemeColor = '#4a90e2';
 let lastScannedId = null; 
 const exitTimers = {}; // { log_id: timerId }
+let isNavigating = false; // 画面遷移中フラグ
+let globalEventSource = null; // SSE接続管理用
+
+// ページ離脱時にリソースを解放する
+window.addEventListener('beforeunload', () => {
+    if (globalEventSource) {
+        globalEventSource.close();
+        globalEventSource = null;
+    }
+}); 
 // 通信タイムアウト設定 (ms)
 const FETCH_TIMEOUT_MS = 3000; // 3秒で諦めて保存
 const SLOW_REQUEST_NOTIFY_MS = 1500; // 1.5秒経過したら「通信中」と表示
@@ -108,6 +118,43 @@ function initializePage() {
         });
         focusQrInput();
     }
+
+    // 記録編集ボタン（管理者モード用）の制御
+    const goEditBtn = document.getElementById('go-edit-btn');
+    if (goEditBtn) {
+        goEditBtn.addEventListener('click', (e) => {
+            if (isNavigating) {
+                e.preventDefault();
+                return;
+            }
+            isNavigating = true;
+            goEditBtn.disabled = true;
+            goEditBtn.textContent = '移動中...';
+            window.location.href = goEditBtn.dataset.href;
+        });
+    }
+    
+    // スキャナモードの「記録編集」ボタンなどのインラインonclick対策
+    // DOM内のonclick属性を持つボタンを全てチェックし、遷移系であれば保護する
+    const buttons = document.querySelectorAll('button[onclick*="location.href"]');
+    buttons.forEach(btn => {
+        const originalOnClick = btn.getAttribute('onclick');
+        // location.href='...' の部分を抽出
+        const match = originalOnClick.match(/location\.href=['"]([^'"]+)['"]/);
+        if (match) {
+            const url = match[1];
+            btn.removeAttribute('onclick'); // 元のハンドラを削除
+            btn.addEventListener('click', (e) => {
+                if (isNavigating) {
+                    e.preventDefault();
+                    return;
+                }
+                isNavigating = true;
+                btn.disabled = true;
+                window.location.href = url;
+            });
+        }
+    });
 }
 
 /**
@@ -250,6 +297,28 @@ function toggleSidebar() {
  * サイドバーのステータス表示と設定モーダルのロジック
  */
 function setupSidebarLogic() {
+    // サイドバー内のリンクに対する連続クリック防止
+    const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
+    sidebarLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            // ページ内リンク(#)やJavaScriptリンク以外（＝画面遷移するもの）を対象
+            const href = link.getAttribute('href');
+            if (href && href !== '#' && !href.startsWith('javascript')) {
+                if (isNavigating) {
+                    e.preventDefault();
+                    return;
+                }
+                // 現在のページと同じリンクでなければフラグを立てる
+                if (href !== window.location.pathname + window.location.search) {
+                    isNavigating = true;
+                    // 視覚的フィードバック（任意）
+                    link.style.opacity = '0.5';
+                    link.style.cursor = 'wait';
+                }
+            }
+        });
+    });
+
     // 1. モード表示の更新
     if (dom.sidebarModeDisplay) {
         const modeMap = { 'admin': '管理者', 'scanner': 'スキャン', 'students': '生徒用' };
@@ -1316,9 +1385,12 @@ async function processOfflineQueue() {
  * @description サーバーからの更新通知を受け取るためのSSE接続を設定する
  */
 function setupSSE() {
-    const eventSource = new EventSource('/api/stream');
+    if (globalEventSource) {
+        globalEventSource.close();
+    }
+    globalEventSource = new EventSource('/api/stream');
     
-    eventSource.onmessage = (event) => {
+    globalEventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'update') {
             console.log("更新通知を受信しました。リストを更新します。");
@@ -1326,7 +1398,7 @@ function setupSSE() {
         }
     };
 
-    eventSource.onerror = (err) => {
+    globalEventSource.onerror = (err) => {
         console.warn("SSE接続エラー (再接続を試みます):", err);
         // EventSourceは自動で再接続するため、ここでは特別な処理は不要
     };
