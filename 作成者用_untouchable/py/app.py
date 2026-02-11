@@ -47,12 +47,13 @@ def configure_logging(app):
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    # ログファイルのパス
-    log_file_path = os.path.join(log_dir, 'server.log')
+    # ログファイルのパス (起動日を含める: server_2023-01-01.log)
+    today_str = datetime.datetime.now().strftime('%Y-%m-%d')
+    log_file_path = os.path.join(log_dir, f'server_{today_str}.log')
 
-    # ローテーション設定: 1MBごとに新しいファイルにし、最大10世代(server.log.1, ... .10)残す
+    # ローテーション設定: 10MBごとに新しいファイルにし、最大10世代残す
     # Windows/マルチプロセス環境でも安全に動作する ConcurrentRotatingFileHandler を使用
-    file_handler = ConcurrentRotatingFileHandler(log_file_path, maxBytes=1024*1024, backupCount=10, encoding='utf-8')
+    file_handler = ConcurrentRotatingFileHandler(log_file_path, maxBytes=10*1024*1024, backupCount=10, encoding='utf-8')
     
     # ログのフォーマット設定: 日時 レベル モジュール メッセージ
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(module)s - %(message)s')
