@@ -327,7 +327,8 @@ async function processQrId(rawId) {
     const normalizedId = normalizeSystemId(rawId);
     
     if (!/^\d{7}$/.test(normalizedId)) {
-        showToast(`無効なID形式です。(認識結果: ${normalizedId || '解析不能'})`);
+        // UX向上のため、フォーマット無効（ノイズや無関係なQR）の場合はエラー表示せず無視する
+        console.warn(`無効なQRデータ: ${rawId} -> 解析結果: ${normalizedId || '解析不能'}`);
         return;
     }
 
