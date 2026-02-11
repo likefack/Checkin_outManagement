@@ -26,14 +26,16 @@
             <h1>{{ app_name }}</h1>
             <div id="current-time" class="header-time">--/-- (--) --:--:--</div>
         </div>
-        {% if mode == 'admin' %}
+        {% if mode == 'admin' or mode == 'scanner' %}
         <div class="header-controls">
+            {% if mode == 'admin' %}
             <div class="report-section">
                 <input type="text" id="report-period" placeholder="期間を選択">
                 <button id="create-report-btn" class="header-btn">集計レポート作成</button>
             </div>
+            {% endif %}
             <div class="nav-buttons">
-                <button onclick="location.href='/?mode=edit'" class="header-btn">記録編集</button>
+                <button onclick="location.href='/?mode=edit&return_mode={{ mode }}'" class="header-btn">記録編集</button>
             </div>
         </div>
         {% endif %}
@@ -71,7 +73,10 @@
                 <button id="exit-all-btn" class="danger-btn">全員退室</button>
             {% elif mode == 'scanner' %}
                 <h2>本日の入室者リスト</h2>
-                <button id="open-camera-btn" class="header-btn" style="margin-left: auto;">QRスキャン</button>
+                <div style="margin-left: auto; display: flex; gap: 10px;">
+                    <button id="exit-all-btn" class="danger-btn">全員退室</button>
+                    <button id="open-camera-btn" class="header-btn">QRスキャン</button>
+                </div>
             {% else %}
                 <h2>手動入室者リスト</h2>
             {% endif %}

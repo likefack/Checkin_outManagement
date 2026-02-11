@@ -194,7 +194,8 @@ def index():
     app_name = os.getenv('APP_NAME', '入退室管理システム')
     org_name_eng = os.getenv('ORGANIZATION_NAME_ENG', 'Codeswitcher Co.,Ltd.')
     if mode == 'edit':
-        return render_template('edit.html', app_name=app_name, org_name_eng=org_name_eng)
+        return_mode = request.args.get('return_mode', 'admin')
+        return render_template('edit.html', app_name=app_name, org_name_eng=org_name_eng, return_mode=return_mode)
     else:
         max_seat_number = int(os.getenv('MAX_SEAT_NUMBER', 72))
         return render_template('index.html', mode=mode, app_name=app_name, max_seat_number=max_seat_number, org_name_eng=org_name_eng)

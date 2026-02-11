@@ -148,6 +148,10 @@ function setupEventListeners() {
     dom.seatSelect.addEventListener('change', onSeatChange);
     dom.attendanceTableBody.addEventListener('click', handleTableClick);
 
+    if (dom.exitAllBtn) {
+        dom.exitAllBtn.addEventListener('click', handleExitAll);
+    }
+
     if (APP_MODE === 'admin') {
         //意図的に他の入力要素へフォーカスした場合は、QR入力欄への強制フォーカス戻しを行わない
         dom.qrInput.addEventListener('blur', (e) => {
@@ -179,7 +183,6 @@ function setupEventListeners() {
         dom.qrInput.addEventListener('keydown', processInput); 
         dom.qrInput.addEventListener('compositionend', processInput);
 
-        dom.exitAllBtn.addEventListener('click', handleExitAll);
         dom.createReportBtn.addEventListener('click', handleCreateReport);
     }
 
