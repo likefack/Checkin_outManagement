@@ -41,8 +41,8 @@
     {% if images %}
         {% for image_file in images %}
         <div class="image-container">
-            <a href="{{ url_for('serve_upload', filename=image_file) }}" target="_blank">
-                <img src="{{ url_for('serve_upload', filename=image_file) }}" alt="添付画像 {{ loop.index }}">
+            <a href="{{ url_for('school_qna.serve_upload', filename=image_file) }}" target="_blank">
+                <img src="{{ url_for('school_qna.serve_upload', filename=image_file) }}" alt="添付画像 {{ loop.index }}">
             </a>
             <a href="{{ url_for('serve_upload', filename=image_file) }}" target="_blank">
                 画像 {{ loop.index }} を新しいタブで開く

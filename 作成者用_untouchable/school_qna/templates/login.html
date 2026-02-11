@@ -7,7 +7,7 @@
     <h1>{{ title }}</h1>
 
     {# ★★★ 変更点: formのアクションにnextパラメータを追加 ★★★ #}
-    <form method="POST" action="{{ url_for('login', next=request.args.get('next', '')) }}">
+    <form method="POST" action="{{ url_for('school_qna.login', next=request.args.get('next', '')) }}">
         <div class="form-group">
             <label for="password">パスワード:</label>
             <input type="password" id="password" name="password" class="form-control" required>
@@ -16,7 +16,7 @@
     </form>
     <p style="margin-top: 20px;">
         {# パスワード変更へのリンクはbase.htmlのナビゲーションにあるので、ここでは不要かもしれませんが一応残します #}
-        <a href="{{ url_for('change_password_prompt_current') }}">パスワード変更はこちらから</a>
+        <a href="{{ url_for('school_qna.change_password_prompt_current') }}">パスワード変更はこちらから</a>
     </p>
 </div>
 {% endblock %}

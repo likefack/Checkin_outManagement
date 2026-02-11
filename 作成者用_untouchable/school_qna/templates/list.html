@@ -9,7 +9,7 @@
 
 <p class="list-reset-note">※サーバー稼働時、19：30に質問履歴が自動でリセットされます。</p>
 
-<form id="bulk-delete-form" action="{{ url_for('delete_selected_questions') }}" method="POST">
+<form id="bulk-delete-form" action="{{ url_for('school_qna.delete_selected_questions') }}" method="POST">
     
     {% if questions %}
     <div style="margin-bottom: 15px;">
@@ -57,7 +57,7 @@
                 {% if q.image_path and q.image_path != '[]' %}
                     {% set image_list = q.image_path | fromjson %}
                     {% if image_list and image_list | length > 0 %}
-                        <a href="{{ url_for('view_images', question_id=q.id) }}" target="_blank">写真</a>
+                        <a href="{{ url_for('school_qna.view_images', question_id=q.id) }}" target="_blank">写真</a>
                         {% if image_list | length > 1 %}
                             <br>(全{{ image_list | length }}枚)
                         {% endif %}
