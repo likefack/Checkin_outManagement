@@ -3,18 +3,21 @@ import sqlite3
 import os
 import datetime
 import csv
-import subprocess # ファイル属性操作にのみ使用
+import subprocess
+import glob
+import pandas as pd
 
 # --- パス定義 ---
 SYSTEM_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT_DIR = os.path.dirname(SYSTEM_DIR)
-DATA_DIR = os.path.join(PROJECT_ROOT_DIR, 'data_可触部')
-EXCEL_FOLDER = os.path.join(DATA_DIR, 'excel')
-ROSTER_FILE = os.path.join(EXCEL_FOLDER, '名簿.xlsx')
-HISTORY_FILE_XLSX = os.path.join(EXCEL_FOLDER, '質問履歴.xlsx')
-HISTORY_FILE_CSV = os.path.join(EXCEL_FOLDER, '質問履歴_for_import.csv')
-DATABASE = os.path.join(SYSTEM_DIR, 'questions.db')
+# 管理者用_touchable フォルダへのパス (../../管理者用_touchable)
+TOUCHABLE_DIR = os.path.join(SYSTEM_DIR, '..', '..', '管理者用_touchable')
+HISTORY_DIR = os.path.join(TOUCHABLE_DIR, '質問履歴')
 
+# ファイルパターン・パス
+STUDENT_INFO_PATTERN = os.path.join(TOUCHABLE_DIR, '生徒情報_*.xlsx')
+HISTORY_FILE_XLSX = os.path.join(HISTORY_DIR, '質問履歴.xlsx')
+HISTORY_FILE_CSV = os.path.join(HISTORY_DIR, '質問履歴_for_import.csv')
+DATABASE = os.path.join(SYSTEM_DIR, 'questions.db')
 
 # --- グローバル定数 ---
 GRADE_DISPLAY_MAP = {
@@ -23,27 +26,6 @@ GRADE_DISPLAY_MAP = {
 }
 
 _roster_cache = None # 名簿データのキャッシュ
-
-def create_roster_template_if_not_exists():
-    """
-    '名簿.xlsx' が存在しない場合に、
-    ヘッダー付きのテンプレートファイルを自動生成する関数。
-    """
-    if not os.path.exists(ROSTER_FILE):
-        try:
-            os.makedirs(EXCEL_FOLDER, exist_ok=True)
-            workbook = openpyxl.Workbook()
-            sheet = workbook.active
-            sheet.title = "名簿"
-            headers = ["学年", "組", "番号", "氏名"]
-            sheet.append(headers)
-            sample_row = ["1", "1", "1", "神戸 太郎"]
-            sheet.append(sample_row)
-            workbook.save(ROSTER_FILE)
-            print(f"'{os.path.basename(ROSTER_FILE)}' が存在しなかったため、テンプレートを自動生成しました。")
-            print("このファイルに生徒名簿のデータを入力してください。")
-        except Exception as e:
-            print(f"🚨 名簿ファイルのテンプレート作成中にエラーが発生しました: {e}")
 
 # --- ヘルパー関数: ファイル属性操作 ---
 def _set_file_attribute_windows(filepath, make_readonly=True):
@@ -63,46 +45,61 @@ def _set_file_attribute_windows(filepath, make_readonly=True):
 
 # --- 名簿読み込み関連 ---
 def load_roster():
-    """名簿を読み込む関数。ファイルがなければテンプレートを自動生成する。"""
+    """
+    管理者用_touchable/生徒情報_*.xlsx から名簿を読み込む関数。
+    """
     global _roster_cache
     if _roster_cache is not None:
         return _roster_cache
     
-    create_roster_template_if_not_exists()
-    
     roster = {}
-    made_writable = False
-    try:
-        if os.path.exists(ROSTER_FILE):
-            if _set_file_attribute_windows(ROSTER_FILE, make_readonly=False):
-                made_writable = True
-            else:
-                print(f"警告: {os.path.basename(ROSTER_FILE)}の読み取り専用属性を解除できませんでした。")
+    
+    # ファイル検索
+    files = glob.glob(STUDENT_INFO_PATTERN)
+    if not files:
+        print(f"🚨 警告: 名簿ファイルが見つかりません。パターン: {STUDENT_INFO_PATTERN}")
+        _roster_cache = {}
+        return _roster_cache
+        
+    target_file = files[0] # 最初に見つかったファイルを使用
+    print(f"名簿ファイル読み込み: {target_file}")
 
-        workbook = openpyxl.load_workbook(ROSTER_FILE, data_only=True)
-        sheet = workbook.active
-        print("名簿 Excel を読み込み中...")
-        for row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-            if not any(row): 
-                continue
+    try:
+        # pandasを使って読み込み (入退室管理アプリと合わせる)
+        df = pd.read_excel(target_file, engine='openpyxl')
+        
+        # カラム名の空白除去
+        df.columns = df.columns.str.strip()
+        
+        # 必要なカラムの存在確認 (入退室アプリの形式: '学年', '組', '番号', '生徒氏名')
+        required_cols = ['学年', '組', '番号', '生徒氏名']
+        if not all(col in df.columns for col in required_cols):
+             # カラムがない場合、'氏名'なども試す
+             if '氏名' in df.columns:
+                 df.rename(columns={'氏名': '生徒氏名'}, inplace=True)
+             else:
+                 print(f"🚨 名簿ファイルに必要なカラムがありません: {required_cols}")
+                 return {}
+
+        for _, row in df.iterrows():
             try:
-                grade, class_num, student_num, name = row[0], row[1], row[2], row[3]
+                grade = int(row['学年']) if pd.notna(row['学年']) else None
+                class_num = int(row['組']) if pd.notna(row['組']) else None
+                student_num = int(row['番号']) if pd.notna(row['番号']) else None
+                name = str(row['生徒氏名']).strip() if pd.notna(row['生徒氏名']) else ""
+
                 if grade and class_num and student_num and name: 
-                    key = f"{int(grade)}-{int(class_num)}-{int(student_num)}"
-                    roster[key] = str(name)
+                    key = f"{grade}-{class_num}-{student_num}"
+                    roster[key] = name
             except (ValueError, TypeError):
-                print(f"  - 警告: 名簿の {row_idx} 行目 ({row}) の学年・組・番号が数値として正しくありません。スキップします。")
+                continue
+                
         _roster_cache = roster
         print(f"名簿を読み込みました: {len(roster)} 人分")
-    except FileNotFoundError:
-        print(f"🚨 警告: 名簿ファイル {ROSTER_FILE} が見つかりません！")
-        _roster_cache = {}
+        
     except Exception as e:
-        print(f"🚨 名簿読み込みエラー: {e}")
+        print(f" 名簿読み込みエラー: {e}")
         _roster_cache = {}
-    finally:
-        if made_writable:
-            _set_file_attribute_windows(ROSTER_FILE, make_readonly=True)
             
     return _roster_cache
 
@@ -133,7 +130,7 @@ def append_to_history(question_id):
         question_db_row = cur.fetchone()
 
         if not question_db_row:
-            print(f"🚨 エラー: ID {question_id} の質問がデータベースで見つかりません。")
+            print(f" エラー: ID {question_id} の質問がデータベースで見つかりません。")
             return
 
         question = dict(question_db_row)
@@ -178,7 +175,7 @@ def append_to_history(question_id):
             workbook.save(HISTORY_FILE_XLSX)
             print(f"  - ID {question_id} を Excel ({os.path.basename(HISTORY_FILE_XLSX)}) に追記しました。")
         except Exception as e:
-            print(f"🚨 Excel (.xlsx) 履歴書き込みエラー: {e}")
+            print(f" Excel (.xlsx) 履歴書き込みエラー: {e}")
         finally:
             if xlsx_made_writable:
                 _set_file_attribute_windows(HISTORY_FILE_XLSX, make_readonly=True)

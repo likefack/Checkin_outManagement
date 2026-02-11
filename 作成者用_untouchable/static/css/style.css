@@ -132,6 +132,77 @@ body {
     font-weight: bold;
     border-left: 5px solid var(--primary-color);
 }
+
+/* サイドバーステータスカード */
+.sidebar-status-card {
+    margin: 15px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.9em;
+}
+
+.status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.status-item:last-child { margin-bottom: 0; }
+
+.status-label { color: #666; }
+.status-value { font-weight: bold; }
+
+.status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 5px;
+}
+.status-dot.green { background-color: #28a745; }
+.status-dot.red { background-color: var(--danger-color); }
+.status-dot.orange { background-color: #ffc107; }
+
+.mode-badge {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.85em;
+}
+
+/* サイドバー設定ボタン */
+.sidebar-actions {
+    padding: 15px;
+    border-top: 1px solid var(--border-color);
+    margin-top: auto; /* ナビゲーションの下に配置 */
+}
+
+.sidebar-action-btn {
+    width: 100%;
+    padding: 10px;
+    background-color: white;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    color: var(--text-color);
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.2s;
+}
+.sidebar-action-btn:hover { background-color: #f0f0f0; }
+
+.sidebar-footer {
+    padding: 10px 15px;
+    font-size: 0.75em;
+    color: #999;
+    text-align: center;
+    background-color: #f8f9fa;
+    border-top: 1px solid var(--border-color);
+}
+.sidebar-footer p { margin: 2px 0; }
+
 .header-controls { display: flex; justify-content: space-between; align-items: center; }
 .report-section, .nav-buttons { display: flex; align-items: center; gap: 10px; }
 .header-btn, #create-report-btn { padding: 8px 15px; border: none; border-radius: 5px; background-color: var(--primary-color); color: white; font-size: 0.9em; cursor: pointer; transition: background-color 0.2s; }
@@ -364,4 +435,65 @@ thead th {
     box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); /* 周囲を暗くする */
     z-index: 10;
     pointer-events: none;
+}
+
+/* --- 設定モーダル・汎用モーダルスタイル --- */
+.modal-content {
+    background-color: white;
+    padding: 25px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    text-align: left;
+    position: relative;
+}
+
+/* 設定モーダルは、カメラ機能対策で前面に出ているヘッダー(z-index: 2001)より上に表示する */
+#settings-modal {
+    z-index: 2500; 
+}
+
+/* 設定フォーム内のスタイル */
+#settings-form .form-group {
+    margin-bottom: 15px;
+}
+
+#settings-form label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: var(--text-color);
+}
+
+#settings-form input {
+    width: 100%;
+    padding: 10px;
+    box-sizing: border-box;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    font-size: 1em;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.modal-actions button {
+    padding: 10px 20px;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    font-size: 1em;
+    color: white;
+}
+
+#close-settings-btn {
+    background-color: #6c757d;
+}
+#close-settings-btn:hover {
+    background-color: #5a6268;
 }

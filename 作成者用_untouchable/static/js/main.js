@@ -45,7 +45,16 @@ const dom = {
     sidebarToggle: document.getElementById('sidebar-toggle'),
     sidebarClose: document.getElementById('sidebar-close'),
     sidebar: document.getElementById('sidebar'),
-    sidebarOverlay: document.getElementById('sidebar-overlay')
+    sidebarOverlay: document.getElementById('sidebar-overlay'),
+    // 設定・ステータス関連
+    sidebarModeDisplay: document.getElementById('sidebar-mode-display'),
+    sidebarNetworkStatus: document.getElementById('sidebar-network-status'),
+    networkText: document.getElementById('network-text'),
+    sidebarServerStatus: document.getElementById('sidebar-server-status'),
+    openSettingsBtn: document.getElementById('open-settings-btn'),
+    settingsModal: document.getElementById('settings-modal'),
+    settingsForm: document.getElementById('settings-form'),
+    closeSettingsBtn: document.getElementById('close-settings-btn')
 };
 
 /**
@@ -64,9 +73,14 @@ function initializePage() {
 
     fetchInitialData();
     setupEventListeners();
+    setupSidebarLogic(); // 追加: サイドバー機能の初期化
     
     // オンライン復帰時にキューを処理するイベントリスナー
-    window.addEventListener('online', processOfflineQueue);
+    window.addEventListener('online', () => {
+        processOfflineQueue();
+        updateNetworkStatusUI(); // 追加: UI更新
+    });
+    window.addEventListener('offline', updateNetworkStatusUI); // 追加: オフライン時UI更新
     // ページ読み込み時に未送信があれば処理を試みる
     if (navigator.onLine && offlineQueue.length > 0) {
         processOfflineQueue();
@@ -227,6 +241,139 @@ function setupEventListeners() {
 function toggleSidebar() {
     dom.sidebar.classList.toggle('active');
     dom.sidebarOverlay.classList.toggle('active');
+}
+
+/**
+ * サイドバーのステータス表示と設定モーダルのロジック
+ */
+function setupSidebarLogic() {
+    // 1. モード表示の更新
+    if (dom.sidebarModeDisplay) {
+        const modeMap = { 'admin': '管理者', 'scanner': 'スキャン', 'students': '生徒用' };
+        dom.sidebarModeDisplay.textContent = modeMap[APP_MODE] || APP_MODE;
+    }
+
+    // 2. ネットワークステータスの初期表示
+    updateNetworkStatusUI();
+
+    // 3. サーバー通信チェック（定期実行）
+    setInterval(checkServerHealth, 30000); // 30秒ごとにチェック
+    checkServerHealth(); // 初回実行
+
+    // 4. 設定モーダルのイベントリスナー
+    if (dom.openSettingsBtn) {
+        dom.openSettingsBtn.addEventListener('click', openSettingsModal);
+    }
+    if (dom.closeSettingsBtn) {
+        dom.closeSettingsBtn.addEventListener('click', closeSettingsModal);
+    }
+    if (dom.settingsForm) {
+        dom.settingsForm.addEventListener('submit', handleSettingsSave);
+    }
+}
+
+function updateNetworkStatusUI() {
+    if (!dom.sidebarNetworkStatus) return;
+    
+    const isOnline = navigator.onLine;
+    const dot = dom.sidebarNetworkStatus.querySelector('.status-dot');
+    const text = dom.networkText;
+
+    if (isOnline) {
+        dot.className = 'status-dot green';
+        text.textContent = 'オンライン';
+    } else {
+        dot.className = 'status-dot red';
+        text.textContent = 'オフライン';
+    }
+}
+
+async function checkServerHealth() {
+    if (!dom.sidebarServerStatus) return;
+    if (!navigator.onLine) {
+        dom.sidebarServerStatus.textContent = '通信不可';
+        dom.sidebarServerStatus.style.color = 'var(--danger-color)';
+        return;
+    }
+
+    try {
+        // 軽いエンドポイントを叩いて確認（ここでは設定取得APIを流用）
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        
+        const res = await fetch('/api/settings', { method: 'GET', signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+            dom.sidebarServerStatus.textContent = '正常';
+            dom.sidebarServerStatus.style.color = '#28a745';
+        } else {
+            throw new Error('Status not OK');
+        }
+    } catch (e) {
+        dom.sidebarServerStatus.textContent = 'エラー';
+        dom.sidebarServerStatus.style.color = 'var(--danger-color)';
+    }
+}
+
+async function openSettingsModal() {
+    // 現在の設定を取得してフォームに埋め込む
+    try {
+        const res = await fetch('/api/settings');
+        if (res.ok) {
+            const data = await res.json();
+            const form = dom.settingsForm;
+            if (form) {
+                // 各入力欄に値をセット
+                Object.keys(data).forEach(key => {
+                    if (form.elements[key]) {
+                        form.elements[key].value = data[key];
+                    }
+                });
+            }
+        }
+    } catch (e) {
+        console.error("設定取得エラー:", e);
+        showToast("設定の読み込みに失敗しました");
+    }
+    
+    dom.settingsModal.style.display = 'flex';
+    // サイドバーを閉じる
+    dom.sidebar.classList.remove('active');
+    dom.sidebarOverlay.classList.remove('active');
+}
+
+function closeSettingsModal() {
+    dom.settingsModal.style.display = 'none';
+}
+
+async function handleSettingsSave(e) {
+    e.preventDefault();
+    if (!confirm("設定を保存しますか？\n変更内容によっては再起動が必要です。")) return;
+
+    const formData = new FormData(dom.settingsForm);
+    const data = Object.fromEntries(formData.entries());
+
+    try {
+        const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        
+        showToast(result.message);
+        if (res.ok) {
+            closeSettingsModal();
+            // アプリ名などが変わった可能性があるためリロードを推奨
+            if (confirm("設定を反映するためページを再読み込みしますか？")) {
+                location.reload();
+            }
+        }
+    } catch (e) {
+        console.error("設定保存エラー:", e);
+        showToast("保存中にエラーが発生しました");
+    }
 }
 
 // --- 入退室処理 ---

@@ -2,25 +2,23 @@ import openpyxl
 import os
 
 # --- パス定義 ---
-# このファイルが存在するディレクトリ（/system_不可触部）を取得
+# このファイルが存在するディレクトリ（/school_qna）を取得
 SYSTEM_DIR = os.path.dirname(os.path.abspath(__file__))
-# プロジェクトのルートディレクトリを取得
-PROJECT_ROOT_DIR = os.path.dirname(SYSTEM_DIR)
-# Excelファイルが配置されるべきパスを定義
-DATA_DIR = os.path.join(PROJECT_ROOT_DIR, 'data_可触部')
-EXCEL_FOLDER = os.path.join(DATA_DIR, 'excel')
-CATEGORIES_FILE = os.path.join(EXCEL_FOLDER, '質問内容と小区分の編集.xlsx')
+# 管理者用_touchable フォルダへのパスを定義 (../../管理者用_touchable)
+TOUCHABLE_DIR = os.path.join(SYSTEM_DIR, '..', '..', '管理者用_touchable')
+CATEGORIES_FILE = os.path.join(TOUCHABLE_DIR, '質問内容と小区分の編集.xlsx')
 
 def create_categories_template_if_not_exists():
     """
     '質問内容と小区分の編集.xlsx' が存在しない場合に、
     ヘッダー付きのテンプレートファイルを自動生成する関数。
     """
+    # フォルダが存在しない場合は作成（通常は入退室アプリ側であるはずだが念のため）
+    if not os.path.exists(TOUCHABLE_DIR):
+        os.makedirs(TOUCHABLE_DIR, exist_ok=True)
+
     if not os.path.exists(CATEGORIES_FILE):
         try:
-            # excelフォルダがなければ作成
-            os.makedirs(EXCEL_FOLDER, exist_ok=True)
-            
             workbook = openpyxl.Workbook()
             sheet = workbook.active
             sheet.title = "質問項目"
@@ -41,7 +39,7 @@ def create_categories_template_if_not_exists():
             print("このファイルに質問内容と小区分を記入してください。")
 
         except Exception as e:
-            print(f"🚨 カテゴリファイルのテンプレート作成中にエラーが発生しました: {e}")
+            print(f" カテゴリファイルのテンプレート作成中にエラーが発生しました: {e}")
 
 
 def load_sub_categories():

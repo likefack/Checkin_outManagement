@@ -207,7 +207,7 @@ with app.app_context():
 def index():
     mode = request.args.get('mode', 'students')
     app_name = os.getenv('APP_NAME', '入退室管理システム')
-    org_name_eng = os.getenv('ORGANIZATION_NAME_ENG', 'Codeswitcher Co.,Ltd.')
+    org_name_eng = os.getenv('ORGANIZATION_NAME_ENG', '2026 Codeswitcher Co.,Ltd.')
     if mode == 'edit':
         return_mode = request.args.get('return_mode', 'admin')
         return render_template('edit.html', app_name=app_name, org_name_eng=org_name_eng, return_mode=return_mode)
@@ -626,6 +626,63 @@ def handle_create_report():
     else:
         app.logger.error(f"[操作ログ] 集計レポート作成失敗 - 期間: {start_date} ～ {end_date}, エラー: {message}")
         return jsonify({'status': 'error', 'message': message}), 500
+
+# --- 設定管理用API ---
+@app.route('/api/settings', methods=['GET', 'POST'])
+def manage_settings():
+    # 編集を許可するキーのリスト
+    ALLOWED_KEYS = ['APP_NAME', 'ORGANIZATION_NAME', 'ORGANIZATION_NAME_ENG', 'MAX_SEAT_NUMBER']
+    
+    if request.method == 'GET':
+        settings = {key: os.getenv(key, '') for key in ALLOWED_KEYS}
+        return jsonify(settings)
+    
+    elif request.method == 'POST':
+        new_settings = request.json
+        if not new_settings:
+            return jsonify({'status': 'error', 'message': 'データがありません'}), 400
+            
+        try:
+            # .envファイルを読み込んで行ごとに処理
+            lines = []
+            if os.path.exists(dotenv_path):
+                with open(dotenv_path, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+            
+            updated_keys = set()
+            new_lines = []
+            
+            for line in lines:
+                key_part = line.split('=')[0].strip()
+                # 更新対象のキーであれば、新しい値に書き換える
+                if key_part in ALLOWED_KEYS and key_part in new_settings:
+                    new_val = str(new_settings[key_part]).replace('\n', '') # 改行除去
+                    new_lines.append(f"{key_part}=\"{new_val}\"\n")
+                    updated_keys.add(key_part)
+                else:
+                    new_lines.append(line)
+            
+            # ファイルになかったキーは追記する
+            for key in ALLOWED_KEYS:
+                if key in new_settings and key not in updated_keys:
+                    new_val = str(new_settings[key]).replace('\n', '')
+                    new_lines.append(f"\n{key}=\"{new_val}\"\n")
+            
+            # 書き込み
+            with open(dotenv_path, 'w', encoding='utf-8') as f:
+                f.writelines(new_lines)
+                
+            # 環境変数を再ロードして即時反映させることは難しい（再起動推奨）が、
+            # os.environ は更新しておく
+            for key in ALLOWED_KEYS:
+                if key in new_settings:
+                    os.environ[key] = str(new_settings[key])
+
+            return jsonify({'status': 'success', 'message': '設定を保存しました。反映にはサーバーの再起動が必要な場合があります。'})
+            
+        except Exception as e:
+            app.logger.error(f"設定保存エラー: {e}", exc_info=True)
+            return jsonify({'status': 'error', 'message': f'保存に失敗しました: {e}'}), 500
 
 # --- 記録編集ページ用API ---
 def convert_to_utc(time_str):
