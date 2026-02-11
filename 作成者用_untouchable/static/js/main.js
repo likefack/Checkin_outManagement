@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
 let studentsData = {};
 let currentAttendees = [];
 let isCalendarOpen = false;
+let originalThemeColor = '#4a90e2';
 let lastScannedId = null; 
 const exitTimers = {}; // { log_id: timerId }
 // 通信タイムアウト設定 (ms)
@@ -54,7 +55,9 @@ const dom = {
     openSettingsBtn: document.getElementById('open-settings-btn'),
     settingsModal: document.getElementById('settings-modal'),
     settingsForm: document.getElementById('settings-form'),
-    closeSettingsBtn: document.getElementById('close-settings-btn')
+    closeSettingsBtn: document.getElementById('close-settings-btn'),
+    themeColorInput: document.getElementById('settings-theme-color'),
+    resetThemeColorBtn: document.getElementById('reset-theme-color-btn')
 };
 
 /**
@@ -270,6 +273,22 @@ function setupSidebarLogic() {
     if (dom.settingsForm) {
         dom.settingsForm.addEventListener('submit', handleSettingsSave);
     }
+
+    // テーマカラーのリアルタイムプレビュー
+    if (dom.themeColorInput) {
+        dom.themeColorInput.addEventListener('input', (e) => {
+            document.documentElement.style.setProperty('--primary-color', e.target.value);
+        });
+    }
+
+    // デフォルトリセット機能
+    if (dom.resetThemeColorBtn) {
+        dom.resetThemeColorBtn.addEventListener('click', () => {
+            const defaultColor = '#4a90e2';
+            dom.themeColorInput.value = defaultColor;
+            document.documentElement.style.setProperty('--primary-color', defaultColor);
+        });
+    }
 }
 
 function updateNetworkStatusUI() {
@@ -317,6 +336,9 @@ async function checkServerHealth() {
 }
 
 async function openSettingsModal() {
+    // プレビューのキャンセル用に現在の色を保存
+    originalThemeColor = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim();
+
     // 現在の設定を取得してフォームに埋め込む
     try {
         const res = await fetch('/api/settings');
@@ -330,6 +352,10 @@ async function openSettingsModal() {
                         form.elements[key].value = data[key];
                     }
                 });
+                // 取得した色をプレビューに反映
+                if (data.THEME_COLOR) {
+                    document.documentElement.style.setProperty('--primary-color', data.THEME_COLOR);
+                }
             }
         }
     } catch (e) {
@@ -344,6 +370,8 @@ async function openSettingsModal() {
 }
 
 function closeSettingsModal() {
+    // 保存せずに閉じる場合はプレビューを破棄して元の色に戻す
+    document.documentElement.style.setProperty('--primary-color', originalThemeColor);
     dom.settingsModal.style.display = 'none';
 }
 
