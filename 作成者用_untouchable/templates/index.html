@@ -111,6 +111,13 @@
                 <li><a href="/" class="active">入退室管理システム</a></li>
                 <li><a href="/qna/">質問管理システム</a></li>
             </ul>
+            
+            <div class="sidebar-section-header">モード切替</div>
+            <ul>
+                <li><a href="/?mode=students" class="{% if mode == 'students' or not mode %}active-mode{% endif %}">通常モード (生徒用)</a></li>
+                <li><a href="/?mode=scanner" class="{% if mode == 'scanner' %}active-mode{% endif %}">スキャナーモード</a></li>
+                <li><a href="/?mode=admin" class="{% if mode == 'admin' %}active-mode{% endif %}">管理者モード</a></li>
+            </ul>
         </nav>
 
         <div class="sidebar-actions">
@@ -247,7 +254,7 @@
                 if ((isIOS || isIPad) && !mode) {
                     console.log("iOS/iPadOS device detected. Staying in students mode.");
                 } 
-                else if (mode !== 'admin' && mode !== 'scanner') {
+                else if (mode !== 'admin' && mode !== 'scanner' && mode !== 'students') {
                     console.log("PC device detected. Redirecting to admin mode.");
                     window.location.href = '/?mode=admin';
                 }

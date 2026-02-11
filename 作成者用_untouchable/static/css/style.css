@@ -133,6 +133,20 @@ body {
     border-left: 5px solid var(--primary-color);
 }
 
+.sidebar-section-header {
+    padding: 15px 20px 5px 20px;
+    font-size: 0.85em;
+    color: #888;
+    font-weight: bold;
+}
+
+.sidebar-nav li a.active-mode {
+    background-color: #f0f0f0;
+    color: var(--text-color);
+    font-weight: bold;
+    border-left: 5px solid #888;
+}
+
 /* サイドバーステータスカード */
 .sidebar-status-card {
     margin: 15px;

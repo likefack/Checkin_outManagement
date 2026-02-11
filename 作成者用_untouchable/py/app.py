@@ -6,6 +6,9 @@ import traceback
 import logging # 追加
 import queue
 import json
+import secrets # 追加
+import atexit # 追加
+from apscheduler.schedulers.background import BackgroundScheduler # 追加
 # from logging.handlers import RotatingFileHandler # 削除またはコメントアウト
 from concurrent_log_handler import ConcurrentRotatingFileHandler # 追加
 import os # osがインポートされているか確認（なければ追加）
@@ -44,6 +47,9 @@ def announce_update():
 app = Flask(__name__, 
             template_folder=os.path.join(os.path.dirname(__file__), '..', 'templates'),
             static_folder=os.path.join(os.path.dirname(__file__), '..', 'static'))
+
+# 【修正】セッションを利用するためにSecret Keyを設定 (これがないとログイン機能などで落ちる)
+app.secret_key = secrets.token_hex(16)
 
 # 【追加】Blueprintを登録 (URLのプレフィックスを /qna に設定)
 app.register_blueprint(school_qna_bp, url_prefix='/qna')

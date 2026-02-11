@@ -28,11 +28,11 @@
 <br>
 <div class="actions">
     {% if question and question.status == 'pending' %} {# 「未済」の場合のみ撤回ボタンを表示 #}
-    <form action="{{ url_for('retract_question', question_id=question.id) }}" method="POST" style="display: inline; margin-right: 10px;">
+    <form action="{{ url_for('school_qna.retract_question', question_id=question.id) }}" method="POST" style="display: inline; margin-right: 10px;">
         <button type="submit" class="button delete-button" onclick="return confirm('本当にこの質問を撤回しますか？');">質問を撤回</button>
     </form>
     {% endif %}
-    <form action="{{ url_for('index') }}" method="GET" style="display: inline;">
+    <form action="{{ url_for('school_qna.index') }}" method="GET" style="display: inline;">
         <button type="submit" class="button">新規受付へ</button>
     </form>
 </div>
