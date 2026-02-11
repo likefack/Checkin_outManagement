@@ -16,3 +16,6 @@ __pycache__/
 作成者用_untouchable/py/__pycache__/email_sender.cpython-313.pyc
 作成者用_untouchable/py/__pycache__/report_generator.cpython-313.pyc
 管理者用_touchable/server_logs/server.log
+server.log
+server.log.*
+.__server.lock

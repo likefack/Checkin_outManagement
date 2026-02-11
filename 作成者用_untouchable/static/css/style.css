@@ -36,8 +36,102 @@ body {
     flex-shrink: 0;
 }
 .header-main { display: flex; justify-content: space-between; align-items: center; }
+.header-left-group { display: flex; align-items: center; gap: 15px; } /* ハンバーガーとタイトルのグループ化 */
 .header-main h1 { margin: 0; font-size: 1.8em; color: var(--primary-color); }
 .header-time { font-size: 1.2em; font-weight: bold; }
+
+/* --- サイドバー用スタイル --- */
+.sidebar-toggle {
+    background: none;
+    border: none;
+    font-size: 1.5em;
+    cursor: pointer;
+    color: var(--primary-color);
+    padding: 0 5px;
+}
+
+.sidebar {
+    position: fixed;
+    top: 0;
+    left: -280px; /* 初期状態は画面外 */
+    width: 280px;
+    height: 100%;
+    background-color: #fff;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+    transition: left 0.3s ease;
+    z-index: 3000; /* 最前面 */
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar.active {
+    left: 0;
+}
+
+.sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    z-index: 2999; /* サイドバーの下、ヘッダーの上 */
+    display: none;
+}
+
+.sidebar-overlay.active {
+    display: block;
+}
+
+.sidebar-header {
+    padding: 20px;
+    background-color: var(--primary-color);
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sidebar-header h2 {
+    margin: 0;
+    font-size: 1.2em;
+    color: white;
+    border-bottom: none;
+}
+
+.sidebar-close {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.5em;
+    cursor: pointer;
+}
+
+.sidebar-nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.sidebar-nav li a {
+    display: block;
+    padding: 15px 20px;
+    text-decoration: none;
+    color: var(--text-color);
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.2s;
+}
+
+.sidebar-nav li a:hover {
+    background-color: var(--secondary-color);
+}
+
+.sidebar-nav li a.active {
+    background-color: #e6f0fa;
+    color: var(--primary-color);
+    font-weight: bold;
+    border-left: 5px solid var(--primary-color);
+}
 .header-controls { display: flex; justify-content: space-between; align-items: center; }
 .report-section, .nav-buttons { display: flex; align-items: center; gap: 10px; }
 .header-btn, #create-report-btn { padding: 8px 15px; border: none; border-radius: 5px; background-color: var(--primary-color); color: white; font-size: 0.9em; cursor: pointer; transition: background-color 0.2s; }
@@ -211,6 +305,20 @@ thead th {
     justify-content: center; /* 左右中央 */
     align-items: center;     /* 上下中央 */
     z-index: 2000;
+}
+
+/* カメラモーダルの位置調整: 下寄せにしつつ、底辺から少し浮かせる */
+#camera-modal {
+    align-items: flex-end;
+    padding-bottom: 20vh; /* 画面高さの20%分上に移動 */
+}
+
+/* カメラ起動中もタイトル・時計・手動入力フォームを最前面に表示して操作可能にする */
+.header-main,
+.manual-entry-form {
+    position: relative;
+    z-index: 2001; /* モーダル(2000)より上 */
+    background-color: var(--header-bg); /* 背景色を確保して透けないようにする */
 }
 
 .camera-modal-content {

@@ -23,7 +23,10 @@
 <body>
     <header class="fixed-header">
         <div class="header-main">
-            <h1>{{ app_name }}</h1>
+            <div class="header-left-group">
+                <button id="sidebar-toggle" class="sidebar-toggle">☰</button>
+                <h1>{{ app_name }}</h1>
+            </div>
             <div id="current-time" class="header-time">--/-- (--) --:--:--</div>
         </div>
         {% if mode == 'admin' or mode == 'scanner' %}
@@ -82,6 +85,20 @@
             {% endif %}
         </div>
     </header>
+
+    <aside id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <h2>自習室業務支援システム</h2>
+            <button id="sidebar-close" class="sidebar-close">×</button>
+        </div>
+        <nav class="sidebar-nav">
+            <ul>
+                <li><a href="/" class="active">入退室管理システム</a></li>
+                <li><a href="#" style="color: #999; pointer-events: none;">質問受付管理システム</a></li>
+            </ul>
+        </nav>
+    </aside>
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
 
     <main>
         <div class="table-container">

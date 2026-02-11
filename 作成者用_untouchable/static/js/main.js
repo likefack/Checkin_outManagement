@@ -40,7 +40,12 @@ const dom = {
     cameraModal: document.getElementById('camera-modal'),
     cameraVideo: document.getElementById('camera-video'),
     cameraCanvas: document.getElementById('camera-canvas'),
-    closeCameraBtn: document.getElementById('close-camera-btn')
+    closeCameraBtn: document.getElementById('close-camera-btn'),
+    // サイドバー関連
+    sidebarToggle: document.getElementById('sidebar-toggle'),
+    sidebarClose: document.getElementById('sidebar-close'),
+    sidebar: document.getElementById('sidebar'),
+    sidebarOverlay: document.getElementById('sidebar-overlay')
 };
 
 /**
@@ -206,6 +211,22 @@ function setupEventListeners() {
     if (dom.closeCameraBtn) {
         dom.closeCameraBtn.addEventListener('click', closeCamera);
     }
+
+    // サイドバー操作
+    if (dom.sidebarToggle) {
+        dom.sidebarToggle.addEventListener('click', toggleSidebar);
+    }
+    if (dom.sidebarClose) {
+        dom.sidebarClose.addEventListener('click', toggleSidebar);
+    }
+    if (dom.sidebarOverlay) {
+        dom.sidebarOverlay.addEventListener('click', toggleSidebar);
+    }
+}
+
+function toggleSidebar() {
+    dom.sidebar.classList.toggle('active');
+    dom.sidebarOverlay.classList.toggle('active');
 }
 
 // --- 入退室処理 ---

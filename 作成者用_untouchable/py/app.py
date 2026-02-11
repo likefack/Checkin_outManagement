@@ -6,7 +6,9 @@ import traceback
 import logging # 追加
 import queue
 import json
-from logging.handlers import RotatingFileHandler # 追加
+# from logging.handlers import RotatingFileHandler # 削除またはコメントアウト
+from concurrent_log_handler import ConcurrentRotatingFileHandler # 追加
+import os # osがインポートされているか確認（なければ追加）
 from flask import Flask, render_template, request, jsonify, Response
 from dotenv import load_dotenv
 import database
@@ -49,7 +51,8 @@ def configure_logging(app):
     log_file_path = os.path.join(log_dir, 'server.log')
 
     # ローテーション設定: 1MBごとに新しいファイルにし、最大10世代(server.log.1, ... .10)残す
-    file_handler = RotatingFileHandler(log_file_path, maxBytes=1024*1024, backupCount=10, encoding='utf-8')
+    # Windows/マルチプロセス環境でも安全に動作する ConcurrentRotatingFileHandler を使用
+    file_handler = ConcurrentRotatingFileHandler(log_file_path, maxBytes=1024*1024, backupCount=10, encoding='utf-8')
     
     # ログのフォーマット設定: 日時 レベル モジュール メッセージ
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(module)s - %(message)s')
