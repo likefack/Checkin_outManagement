@@ -147,6 +147,19 @@ body {
     border-left: 5px solid #888;
 }
 
+/* レイヤー2（モード切替サブメニュー）のスタイル */
+.sidebar-nav .sidebar-sub-nav li a {
+    padding: 10px 20px 10px 40px; /* 左インデントを追加 */
+    font-size: 0.9em;             /* 文字サイズを小さく */
+    color: #666;                  /* 色を控えめに */
+    border-bottom: 1px solid #f5f5f5; /* 区切り線を薄く */
+}
+
+.sidebar-nav .sidebar-sub-nav li a:hover {
+    background-color: #f8f9fa;
+    color: var(--text-color);
+}
+
 /* サイドバーステータスカード */
 .sidebar-status-card {
     margin: 15px;

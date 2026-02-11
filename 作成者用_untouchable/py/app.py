@@ -27,6 +27,19 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..')) 
 from school_qna import school_qna_bp
 
+# 【追加】ポーリング系のログを除外するフィルタークラス
+class PollingLogFilter(logging.Filter):
+    def filter(self, record):
+        msg = record.getMessage()
+        # 成功(200)したポーリングリクエストはログに出さない
+        if 'GET /qna/api/count' in msg and '" 200 ' in msg:
+            return False
+        if 'GET /qna/api/check_new_questions' in msg and '" 200 ' in msg:
+            return False
+        if 'GET /api/stream' in msg and '" 200 ' in msg: # メインアプリのSSE接続ログも抑制したい場合
+            return False
+        return True
+
 # --- アプリケーションの初期設定 ---
 dotenv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '管理者用_touchable', '.env')
 load_dotenv(dotenv_path)
@@ -78,11 +91,13 @@ def configure_logging(app):
     
     # ログレベル設定 (INFO以上を記録)
     file_handler.setLevel(logging.INFO)
+    file_handler.addFilter(PollingLogFilter()) # 【追加】ファイルログにもフィルタ適用
 
     # --- 追加: コンソール出力用のハンドラ ---
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(formatter)
     stream_handler.setLevel(logging.INFO)
+    stream_handler.addFilter(PollingLogFilter()) # 【追加】コンソールログにもフィルタ適用
     # ------------------------------------
 
     # ルートロガー設定（ここだけにハンドラを集約する）

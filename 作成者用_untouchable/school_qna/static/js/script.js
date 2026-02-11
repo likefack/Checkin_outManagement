@@ -17,9 +17,32 @@ function handleFormResetLogic() {
 }
 
 // ★★★ ここからが修正箇所 ★★★
+// 【追加】サイドバー制御
+document.addEventListener('DOMContentLoaded', function() {
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    const sidebarClose = document.getElementById('sidebar-close');
+
+    function openSidebar() {
+        if(sidebar) sidebar.classList.add('active');
+        if(sidebarOverlay) sidebarOverlay.classList.add('active');
+    }
+    function closeSidebar() {
+        if(sidebar) sidebar.classList.remove('active');
+        if(sidebarOverlay) sidebarOverlay.classList.remove('active');
+    }
+
+    if(sidebarToggle) sidebarToggle.addEventListener('click', openSidebar);
+    if(sidebarClose) sidebarClose.addEventListener('click', closeSidebar);
+    if(sidebarOverlay) sidebarOverlay.addEventListener('click', closeSidebar);
+});
+
 // --- 音声再生のグローバル管理 ---
 let isAudioUnlocked = false;
-const notificationSound = new Audio('/static/sounds/notification.m4a');
+// HTMLのbodyタグからプレフィックス(/qna)を取得
+const urlPrefix = document.body.getAttribute('data-url-prefix') || '';
+const notificationSound = new Audio(`${urlPrefix}/static/sounds/notification.m4a`);
 
 // ユーザーの操作をきっかけに、音声再生のロックを解除する関数
 const unlockAudio = () => {
@@ -88,7 +111,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- 待機人数を定期的に更新する機能 ---
     window.updatePendingCount = function() {
-        fetch('/api/count')
+        fetch(`${urlPrefix}/api/count`)
             .then(response => response.json())
             .then(data => {
                 if (pendingCountSpan) pendingCountSpan.textContent = data.count;
@@ -263,7 +286,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const questionId = this.dataset.id;
             const row = this.closest('tr');
             if (!row) return;
-            fetch(`/api/mark_done/${questionId}`, { method: 'POST' })
+            fetch(`${urlPrefix}/api/mark_done/${questionId}`, { method: 'POST' })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -389,7 +412,8 @@ function initializeNotifier() {
     };
 
     const checkForNewQuestions = () => {
-        const url = isInitialLoad ? '/api/check_new_questions?since_id=0' : `/api/check_new_questions?since_id=${lastKnownId}`;
+        const endpoint = `${urlPrefix}/api/check_new_questions`;
+        const url = isInitialLoad ? `${endpoint}?since_id=0` : `${endpoint}?since_id=${lastKnownId}`;
 
         fetch(url)
             .then(response => response.json())
