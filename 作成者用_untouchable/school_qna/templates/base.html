@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>{% block title %}校内質問受付システム{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    {% block styles %}{% endblock %}
+</head>
+<body>
+    <header class="app-header">
+        <h1>校内質問受付システム</h1>
+        <div id="realtime-clock" class="clock-display">読み込み中...</div> 
+        <nav class="main-nav">
+            <span class="nav-separator">|</span>
+            <a href="{{ url_for('school_qna.index') }}">新規受付</a>
+            <span class="nav-separator">|</span>
+            {% if session.logged_in %}
+                <a href="{{ url_for('school_qna.list_view') }}" id="nav-list-link">質問一覧</a>
+                <span class="nav-separator">|</span>
+                <a href="{{ url_for('school_qna.change_password_prompt_current') }}">パスワード変更</a>
+                <span class="nav-separator">|</span>
+                <a href="{{ url_for('school_qna.logout') }}">ログアウト</a>
+            {% else %}
+                <a href="{{ url_for('school_qna.list_view') }}" id="nav-list-link">コーチ用画面</a>
+            {% endif %}
+        </nav>
+    </header>
+    <hr>
+    <script>
+        // VSCodeのエラー回避のため、JSON.parseを使って文字列として受け取る形に変更
+        window.isUserLoggedIn = JSON.parse('{{ is_logged_in|default(False)|tojson }}');
+    </script>
+    <main class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div style="padding: 10px 0;">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </main>
+    <footer>
+        <hr>
+        <p>&copy; 2025 KRiP</p>
+    </footer>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    {% block page_specific_scripts %}{% endblock %} 
+</body>
+</html>

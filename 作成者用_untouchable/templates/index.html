@@ -29,14 +29,12 @@
             </div>
             <div id="current-time" class="header-time">--/-- (--) --:--:--</div>
         </div>
-        {% if mode == 'admin' or mode == 'scanner' %}
+        {% if mode == 'admin' %}
         <div class="header-controls">
-            {% if mode == 'admin' %}
             <div class="report-section">
                 <input type="text" id="report-period" placeholder="期間を選択">
                 <button id="create-report-btn" class="header-btn">集計レポート作成</button>
             </div>
-            {% endif %}
             <div class="nav-buttons">
                 <button onclick="location.href='/?mode=edit&return_mode={{ mode }}'" class="header-btn">記録編集</button>
             </div>
@@ -78,6 +76,7 @@
                 <h2>本日の入室者リスト</h2>
                 <div style="margin-left: auto; display: flex; gap: 10px;">
                     <button id="exit-all-btn" class="danger-btn">全員退室</button>
+                    <button onclick="location.href='/?mode=edit&return_mode={{ mode }}'" class="header-btn">記録編集</button>
                     <button id="open-camera-btn" class="header-btn">QRスキャン</button>
                 </div>
             {% else %}
@@ -94,7 +93,7 @@
         <nav class="sidebar-nav">
             <ul>
                 <li><a href="/" class="active">入退室管理システム</a></li>
-                <li><a href="#" style="color: #999; pointer-events: none;">質問受付管理システム</a></li>
+                <li><a href="/qna/">質問管理システム</a></li>
             </ul>
         </nav>
     </aside>

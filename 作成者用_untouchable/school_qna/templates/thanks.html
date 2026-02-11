@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<h1>{{ main_message }}</h1>
+<p>{{ sub_message }}</p>
+
+{% if question %} {# question 情報が渡されていれば表示 #}
+<div class="confirmation-details">
+    <h3>受付内容の確認</h3>
+    <p><strong>受付ID:</strong> {{ question.id }}</p>
+    <p><strong>学年・組・番号:</strong> {{ GRADE_DISPLAY_MAP.get(question.grade, question.grade) }}年{{ question.class_num }}組{{ question.student_num }}番</p>
+    <p><strong>席番号:</strong> {{ question.seat_num }}</p>
+    <p><strong>氏名:</strong> {{ student_name }}</p>
+    <p><strong>質問内容:</strong> {{ question.subject }}</p>
+    <p><strong>小区分:</strong> {{ question.sub_category }}</p>
+    
+    {% if question.problem_num %}
+    <p><strong>問題番号:</strong> {{ question.problem_num }}</p>
+    {% endif %}
+
+    <p><strong>写真添付:</strong> {% if question.image_path and question.image_path != '[]' %}あり{% else %}なし{% endif %}</p>
+    <p><strong>受付日時:</strong> {{ question.created_at[:16] }}</p>
+</div>
+{% endif %}
+
+<br>
+<div class="actions">
+    {% if question and question.status == 'pending' %} {# 「未済」の場合のみ撤回ボタンを表示 #}
+    <form action="{{ url_for('retract_question', question_id=question.id) }}" method="POST" style="display: inline; margin-right: 10px;">
+        <button type="submit" class="button delete-button" onclick="return confirm('本当にこの質問を撤回しますか？');">質問を撤回</button>
+    </form>
+    {% endif %}
+    <form action="{{ url_for('index') }}" method="GET" style="display: inline;">
+        <button type="submit" class="button">新規受付へ</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block page_specific_scripts %}
+{{ super() }} 
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        // フォームリセット用のフラグを立てる
+        if (urlParams.get('submitted') === 'true') {
+            sessionStorage.setItem('formSuccessfullySubmitted', 'true');
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,82 @@
+{% extends "base.html" %} {% block title %}質問受付フォーム{% endblock %}
+
+{% block content %}
+<h1>質問受付フォーム</h1>
+<h2 style="color: red;">待機人数：<span id="pending-count">?</span> 人</h2>
+
+{% if error %} <p class="error-message">⚠️ {{ error }}</p>
+{% endif %}
+
+<form method="POST" enctype="multipart/form-data" id="question-form">
+    
+    <p class="list-reset-note" style="border: none; padding: 0; margin-bottom: 15px;">※「*」が付いている項目は必須回答です。</p>
+
+    <p><label for="grade">1. 学年: <span class="required">*</span></label><br>
+    <select name="grade" id="grade" required>
+        <option value="">選択してください</option>
+        <option value="1">中1</option> <option value="2">中2</option> <option value="3">中3</option>
+        <option value="4">高1</option> <option value="5">高2</option> <option value="6">高3</option>
+    </select></p>
+
+    <p><label for="class_num">2. 組: <span class="required">*</span></label><br>
+    <select name="class_num" id="class_num" required>
+        <option value="">選択してください</option>
+        {% for i in range(1, 10) %}<option value="{{ i }}">{{ i }}</option>{% endfor %}
+    </select></p>
+
+    <p><label for="student_num">3. 番号: <span class="required">*</span></label><br>
+    <select name="student_num" id="student_num" required>
+        <option value="">選択してください</option>
+        {% for i in range(1, 46) %}<option value="{{ i }}">{{ i }}</option>{% endfor %}
+    </select></p>
+
+    <p><label for="seat_num">4. 席番号: <span class="required">*</span></label>
+        <span class="photo-upload-note">※223、224、225教室を使っている場合は教室番号を選択してください。</span><br>
+    <select name="seat_num" id="seat_num" required>
+        <option value="">選択してください</option>
+        {% for i in range(1, 73) %}<option value="{{ i }}">{{ i }}</option>{% endfor %}
+        <option value="223">223</option>
+        <option value="224">224</option>
+        <option value="225">225</option>
+    </select></p>
+
+    <p><label for="subject">5. 質問内容: <span class="required">*</span></label><br>
+    <select name="subject" id="subject" required>
+        <option value="">選択してください</option>
+        {% for subject_name in sub_categories_data.keys() %}
+        <option value="{{ subject_name }}">{{ subject_name }}</option>
+        {% endfor %}
+    </select></p>
+
+    <p><label for="sub_category">6. 小区分 (単元など): <span class="required">*</span></label><br>
+    <select name="sub_category" id="sub_category" required>
+        <option value="">先に質問内容を選択してください</option>
+    </select></p>
+
+    <div class="form-group">
+        <label for="photo">7. 写真添付（2枚まで）:</label> <span class="photo-upload-note">※質問したい問題がある場合はその問題のみが写るように撮ってください！</span><br>
+        <input type="file" name="photo" id="photo-input" accept="image/*" capture="camera" multiple>
+        
+        <div id="image-preview-container"></div>
+    </div>
+
+    {# ★★★ ここからが修正箇所 ★★★ #}
+    <p><label for="problem_num">8. 問題番号:</label> 
+        <span class="photo-upload-note">※半角数字, カンマ(,), カッコ(), 空白のみ入力可（凡例: 15, 18(3) ）</span><br>
+        <input type="text" name="problem_num" id="problem_num" maxlength="20">
+    </p>
+    {# ★★★ 修正ここまで ★★★ #}
+
+    <p><label>9. 送信方法を選択してください:</label></p>
+    {% if is_logged_in %}
+        <button type="submit" name="submit_button" value="待機列に並ぶ" class="submit-button">待機列に並ぶ</button>
+        <button type="submit" name="submit_button" value="即時対応" class="submit-button immediate">即時対応</button>
+    {% else %}
+        <button type="submit" name="submit_button" value="待機列に並ぶ" class="submit-button">質問を送信</button>
+    {% endif %}
+</form>
+
+<script id="sub-categories-json" type="application/json">
+    {{ sub_categories_data | tojson | safe }}
+</script>
+{% endblock %}

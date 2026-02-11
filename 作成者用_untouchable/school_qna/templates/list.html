@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}質問一覧{% endblock %}
+
+{% block content %}
+<h1>質問一覧</h1>
+
+<h2 style="color: red;">待機人数：<span id="pending-count-list">?</span> 人</h2> 
+
+<p class="list-reset-note">※サーバー稼働時、19：30に質問履歴が自動でリセットされます。</p>
+
+<form id="bulk-delete-form" action="{{ url_for('delete_selected_questions') }}" method="POST">
+    
+    {% if questions %}
+    <div style="margin-bottom: 15px;">
+        <button type="submit" class="button" id="bulk-delete-button">選択した質問を一括削除</button>
+    </div>
+    {% endif %}
+
+    <table>
+        <thead>
+            <tr>
+                <th><input type="checkbox" id="select-all-checkbox" title="すべて選択/解除"></th> 
+                <th>ID</th>
+                <th>受付日時</th>
+                <th>生徒情報</th>
+                <th>席</th>
+                <th>問題番号</th>
+                <th>氏名</th>
+                <th>質問内容</th>
+                <th>単元</th>
+                <th>済</th>
+                <th>写真</th>
+            </tr>
+        </thead>
+        <tbody>
+    {% for q in questions %}
+        <tr class="{{ 'done-row' if q.status == 'done' else '' }}">
+            <td> {% if q.status != 'done' %}
+                <input type="checkbox" name="selected_ids" value="{{ q.id }}" class="question-checkbox">
+                {% endif %}
+            </td>
+            <td>{{ q.id }}</td> <td>{{ q.created_at[:16] }}</td>
+            <td>{{ GRADE_DISPLAY_MAP.get(q.grade, q.grade) }}年{{ q.class_num }}組{{ q.student_num }}番</td>
+            <td>{{ q.seat_num }}</td>
+            <td>{{ q.problem_num }}</td>
+            <td>{{ q.student_name }}</td>
+            <td>{{ q.subject }}</td>
+            <td>{{ q.sub_category }}</td>
+            <td>
+                <input type="checkbox"
+                       class="done-checkbox"
+                       data-id="{{ q.id }}"
+                       {{ 'checked disabled' if q.status == 'done' else '' }}>
+            </td>
+            <td>
+                {% if q.image_path and q.image_path != '[]' %}
+                    {% set image_list = q.image_path | fromjson %}
+                    {% if image_list and image_list | length > 0 %}
+                        <a href="{{ url_for('view_images', question_id=q.id) }}" target="_blank">写真</a>
+                        {% if image_list | length > 1 %}
+                            <br>(全{{ image_list | length }}枚)
+                        {% endif %}
+                    {% endif %}
+                {% endif %}
+            </td>
+            </tr>
+    {% else %}
+        <tr><td colspan="11">現在、質問はありません。</td></tr>
+    {% endfor %}
+</tbody>
+    </table>
+</form>
+
+{% endblock %}
+
+{# ★★★ 変更点: このファイル固有のスクリプトブロックを削除 ★★★ #}

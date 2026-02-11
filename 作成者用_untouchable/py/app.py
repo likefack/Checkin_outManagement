@@ -15,6 +15,14 @@ import database
 from report_generator import create_report
 from achievement_logic import check_achievements
 from email_sender import send_email_async
+# 【追加】質問管理アプリのBlueprintをインポート
+# 注意: pyフォルダから見た相対パスでインポートできるようパスを通すか、
+# school_qnaフォルダをパッケージとして認識させる必要があります。
+# 簡易的に、sys.pathを追加する方法をとります。
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..')) 
+from school_qna import school_qna_bp
 
 # --- アプリケーションの初期設定 ---
 dotenv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '管理者用_touchable', '.env')
@@ -37,7 +45,10 @@ app = Flask(__name__,
             template_folder=os.path.join(os.path.dirname(__file__), '..', 'templates'),
             static_folder=os.path.join(os.path.dirname(__file__), '..', 'static'))
 
-# --- ログ設定の追加 ---
+# 【追加】Blueprintを登録 (URLのプレフィックスを /qna に設定)
+app.register_blueprint(school_qna_bp, url_prefix='/qna')
+
+# --- ログ設定の追加 ---    
 def configure_logging(app):
     # ログ保存先ディレクトリ: ../../管理者用_touchable/server_logs
     base_dir = os.path.dirname(os.path.abspath(__file__))

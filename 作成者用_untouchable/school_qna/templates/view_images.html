@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}添付画像 - 質問ID: {{ question_id }}{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<style>
+    .image-gallery {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        justify-content: center;
+        margin-top: 20px;
+    }
+    .image-container {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 10px;
+        background-color: #fff;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        text-align: center;
+    }
+    .image-container img {
+        max-width: 100%;
+        height: auto;
+        max-height: 70vh; /* 画像が画面の高さを超えすぎないように制限 */
+        display: block;
+        margin-bottom: 10px;
+    }
+    .image-container a {
+        font-weight: bold;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>添付画像一覧</h1>
+<h2>質問ID: {{ question_id }}</h2>
+
+<div class="image-gallery">
+    {% if images %}
+        {% for image_file in images %}
+        <div class="image-container">
+            <a href="{{ url_for('serve_upload', filename=image_file) }}" target="_blank">
+                <img src="{{ url_for('serve_upload', filename=image_file) }}" alt="添付画像 {{ loop.index }}">
+            </a>
+            <a href="{{ url_for('serve_upload', filename=image_file) }}" target="_blank">
+                画像 {{ loop.index }} を新しいタブで開く
+            </a>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p>この質問に添付された画像はありません。</p>
+    {% endif %}
+</div>
+
+<div style="margin-top: 30px; text-align: center;">
+    <a href="{{ url_for('list_view') }}" class="button">質問一覧に戻る</a>
+</div>
+{% endblock %}
