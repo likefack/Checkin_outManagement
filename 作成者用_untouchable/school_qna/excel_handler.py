@@ -13,6 +13,10 @@ SYSTEM_DIR = os.path.dirname(os.path.abspath(__file__))
 TOUCHABLE_DIR = os.path.join(SYSTEM_DIR, '..', '..', '管理者用_touchable')
 HISTORY_DIR = os.path.join(TOUCHABLE_DIR, '質問履歴')
 
+# 出力先ディレクトリが存在しない場合は作成
+if not os.path.exists(HISTORY_DIR):
+    os.makedirs(HISTORY_DIR, exist_ok=True)
+
 # ファイルパターン・パス
 STUDENT_INFO_PATTERN = os.path.join(TOUCHABLE_DIR, '生徒情報_*.xlsx')
 HISTORY_FILE_XLSX = os.path.join(HISTORY_DIR, '質問履歴.xlsx')

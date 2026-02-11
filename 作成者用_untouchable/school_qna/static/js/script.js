@@ -1,5 +1,16 @@
-// ページが全部読み込まれたら、この中の処理を開始する合図
+// --- 端末識別用 ID (client_id) の管理 ---
+const getClientId = () => {
+    let clientId = localStorage.getItem('qna_client_id');
+    if (!clientId) {
+        // ID がなければ生成（ランダムな文字列）
+        clientId = 'client_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+        localStorage.setItem('qna_client_id', clientId);
+    }
+    return clientId;
+};
+const CLIENT_ID = getClientId();
 
+// ページが全部読み込まれたら、この中の処理を開始する合図
 // --- フォームリセット専門の関数 ---
 function handleFormResetLogic() {
     const formElement = document.getElementById('question-form'); 
@@ -292,6 +303,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 seatSelectInput.disabled = true;
             }
 
+            // client_id を追加
+            formData.append('client_id', CLIENT_ID);
+
             formData.delete('photo');
             for (const file of dataTransfer.files) {
                 formData.append('photo', file);
@@ -469,7 +483,10 @@ function initializeNotifier() {
 
     const checkForNewQuestions = () => {
         const endpoint = `${urlPrefix}/api/check_new_questions`;
-        const url = isInitialLoad ? `${endpoint}?since_id=0` : `${endpoint}?since_id=${lastKnownId}`;
+        // URL パラメータに client_id を追加
+        const url = isInitialLoad 
+            ? `${endpoint}?since_id=0&client_id=${CLIENT_ID}` 
+            : `${endpoint}?since_id=${lastKnownId}&client_id=${CLIENT_ID}`;
 
         fetch(url)
             .then(response => response.json())

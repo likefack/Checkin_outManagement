@@ -24,3 +24,5 @@ server_*.log.*
 管理者用_touchable/質問内容と小区分の編集.xlsx
 作成者用_untouchable/school_qna/questions.db
 questions.db
+管理者用_touchable/質問履歴/質問履歴_for_import.csv
+管理者用_touchable/質問履歴/質問履歴.xlsx

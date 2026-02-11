@@ -38,6 +38,8 @@ class PollingLogFilter(logging.Filter):
             return False
         if 'GET /api/stream' in msg and '" 200 ' in msg: # メインアプリのSSE接続ログも抑制したい場合
             return False
+        if 'GET /api/settings' in msg and '" 200 ' in msg: # 【追加】ヘルスチェックのログを抑制
+            return False
         return True
 
 # --- アプリケーションの初期設定 ---
