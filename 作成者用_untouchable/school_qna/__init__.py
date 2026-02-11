@@ -22,6 +22,18 @@ school_qna_bp = Blueprint(
     static_url_path='/qna/static' 
 )
 
+@school_qna_bp.app_template_filter('fromjson')
+def fromjson_filter(value):
+    if value is None:
+        return []
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        # 古い形式の単一文字列（JSONリストではない形式）の場合、リストに変換して返す
+        if isinstance(value, str) and value.strip():
+            return [value]
+        return []
+
 # --- 設定・定数 ---
 # ※ app.config への依存を避けるため、Blueprint内でパスを解決するか、current_app を利用するが、
 # ここではモジュール変数として定義して利用する

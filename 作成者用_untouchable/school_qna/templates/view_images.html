@@ -44,7 +44,7 @@
             <a href="{{ url_for('school_qna.serve_upload', filename=image_file) }}" target="_blank">
                 <img src="{{ url_for('school_qna.serve_upload', filename=image_file) }}" alt="添付画像 {{ loop.index }}">
             </a>
-            <a href="{{ url_for('serve_upload', filename=image_file) }}" target="_blank">
+            <a href="{{ url_for('school_qna.serve_upload', filename=image_file) }}" target="_blank">
                 画像 {{ loop.index }} を新しいタブで開く
             </a>
         </div>
@@ -55,6 +55,6 @@
 </div>
 
 <div style="margin-top: 30px; text-align: center;">
-    <a href="{{ url_for('list_view') }}" class="button">質問一覧に戻る</a>
+    <a href="{{ url_for('school_qna.list_view') }}" class="button">質問一覧に戻る</a>
 </div>
 {% endblock %}

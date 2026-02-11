@@ -347,8 +347,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- 初期呼び出しと定期実行 ---
     window.updatePendingCount(); 
     window.updateClock();        
-    setInterval(window.updatePendingCount, 1000);
-    setInterval(window.updateClock, 1000);      
+    
+    // タイマーを1つに統合して負荷を軽減
+    setInterval(() => {
+        window.updatePendingCount();
+        window.updateClock();
+    }, 1000);
 
     // --- 一覧画面の「済」チェックボックス用 ---
     document.querySelectorAll('.done-checkbox').forEach(checkbox => {
@@ -416,7 +420,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ★★★ 変更点: 音声ロック解除のリスナーをここに追加 ★★★
     document.body.addEventListener('click', unlockAudio);
-    document.body.addEventListener('touchstart', unlockAudio);
+    document.body.addEventListener('touchstart', unlockAudio, { passive: true });
 
     // 通知機能を初期化
     initializeNotifier();
