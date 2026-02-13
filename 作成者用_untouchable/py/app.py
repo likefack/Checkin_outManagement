@@ -401,7 +401,8 @@ def check_in():
         final_rank = ach_result.get('rank') if ach_result and ach_result.get('rank') else student['title']
         
         # [操作ログ] 手動入室の詳細
-        log_suffix = " (オフライン同期)" if data.get('entry_time') else ""
+        # 【修正】時刻指定ではなく、明示的なフラグがある場合のみ「オフライン同期」とする
+        log_suffix = " (オフライン同期)" if data.get('is_offline_sync') else ""
         app.logger.info(f"[操作ログ] 入室処理(手入力){log_suffix} - 生徒ID: {system_id}, 座席: {seat_number}, 実行者IP: {request.remote_addr}")
 
         conn.commit()
@@ -459,7 +460,8 @@ def check_out():
         final_rank = ach_result.get('rank') if ach_result and ach_result.get('rank') else student['title']
         
         # [操作ログ] 手動退室の詳細
-        log_suffix = " (オフライン同期)" if data.get('exit_time') else ""
+        # 【修正】時刻指定ではなく、明示的なフラグがある場合のみ「オフライン同期」とする
+        log_suffix = " (オフライン同期)" if data.get('is_offline_sync') else ""
         app.logger.info(f"[操作ログ] 退室処理(手入力){log_suffix} - 生徒ID: {system_id}, 実行者IP: {request.remote_addr}")
 
         conn.commit()
@@ -537,7 +539,8 @@ def qr_process():
             ach_result = _handle_notifications(conn, system_id, 'check_out', log_id_to_update)
             
             # [操作ログ] QR退室の詳細
-            log_suffix = " (オフライン同期)" if data.get('timestamp') else ""
+            # 【修正】明示的なフラグがある場合のみ「オフライン同期」とする
+            log_suffix = " (オフライン同期)" if data.get('is_offline_sync') else ""
             app.logger.info(f"[操作ログ] 退室処理(QR){log_suffix} - 生徒ID: {system_id}")
         else:
             # --- 入室処理 ---
@@ -555,7 +558,8 @@ def qr_process():
             ach_result = _handle_notifications(conn, system_id, 'check_in', new_log_id)
 
             # [操作ログ] QR入室の詳細 (QR入室時は座席指定なしのためNULL/None扱いです)
-            log_suffix = " (オフライン同期)" if data.get('timestamp') else ""
+            # 【修正】明示的なフラグがある場合のみ「オフライン同期」とする
+            log_suffix = " (オフライン同期)" if data.get('is_offline_sync') else ""
             app.logger.info(f"[操作ログ] 入室処理(QR){log_suffix} - 生徒ID: {system_id}, 座席: 指定なし")
 
         # 最新の称号情報を決定
@@ -915,9 +919,18 @@ def delete_log(log_id):
 # --- SSE用エンドポイント ---
 @app.route('/api/stream')
 def stream():
+    # クライアント情報の取得
+    client_ip = request.remote_addr
+    client_id = request.args.get('client_id', 'unknown')
+    user_agent = request.headers.get('User-Agent', 'unknown')
+
     def event_stream():
         q = queue.Queue()
         sse_clients.append(q)
+        
+        # 接続ログ
+        app.logger.info(f"[通信ログ] クライアント接続 - IP: {client_ip}, ID: {client_id}")
+
         try:
             while True:
                 # キューからメッセージを取得（タイムアウト付きでブロッキング）
@@ -929,20 +942,44 @@ def stream():
                     # タイムアウト時はコメント行を送って接続維持
                     yield ": keep-alive\n\n"
         except GeneratorExit:
-            sse_clients.remove(q)
-        except Exception:
+            # クライアント切断時（タブを閉じる、リロードなど）
+            app.logger.info(f"[通信ログ] クライアント切断検知 - IP: {client_ip}, ID: {client_id}")
+            if q in sse_clients:
+                sse_clients.remove(q)
+        except Exception as e:
+            # その他のエラー切断
+            app.logger.error(f"[通信ログ] クライアント通信エラー - IP: {client_ip}, ID: {client_id}, Error: {e}")
             if q in sse_clients:
                 sse_clients.remove(q)
 
     return Response(event_stream(), mimetype='text/event-stream')
+
+# --- メール再送トリガー用API ---
+@app.route('/api/trigger_email_retry', methods=['POST'])
+def trigger_email_retry():
+    try:
+        # スケジューラを使って即時実行ジョブを追加（メインスレッドをブロックしないため）
+        # 'date' トリガーで run_date を省略、または現在時刻を指定すると即時実行されます
+        scheduler.add_job(retry_queued_emails, 'date', run_date=datetime.datetime.now())
+        app.logger.info("メール再送処理を手動トリガーしました。")
+        return jsonify({'status': 'success', 'message': 'メール再送処理を開始しました。'})
+    except Exception as e:
+        app.logger.error(f"メール再送トリガーエラー: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 # --- 定期実行タスクの設定 ---
 scheduler = BackgroundScheduler()
 # 5分ごとに保留中のメール再送を試みる
 scheduler.add_job(retry_queued_emails, 'interval', minutes=5)
 scheduler.start()
-# アプリ終了時にスケジューラーを停止
-atexit.register(lambda: scheduler.shutdown())
+
+# アプリ終了時の処理
+def on_server_shutdown():
+    app.logger.info("[システムログ] サーバーが停止しました (オフライン)")
+    if scheduler.running:
+        scheduler.shutdown()
+
+atexit.register(on_server_shutdown)
 
 # --- サーバーの起動 ---
 if __name__ == '__main__':
@@ -954,9 +991,11 @@ if __name__ == '__main__':
     # 証明書と秘密鍵の両方が存在するかチェック
     if os.path.exists(cert_path) and os.path.exists(key_path):
         print("SSL証明書を検出しました。HTTPSでサーバーを起動します。")
+        app.logger.info("[システムログ] サーバーが起動しました (HTTPS)")
         # HTTPSで起動
         app.run(host='0.0.0.0', port=8080, debug=True, ssl_context=(cert_path, key_path))
     else:
         print("SSL証明書が見つかりません。HTTPでサーバーを起動します。")
+        app.logger.info("[システムログ] サーバーが起動しました (HTTP)")
         # 通常のHTTPで起動
         app.run(host='0.0.0.0', port=8080, debug=True)

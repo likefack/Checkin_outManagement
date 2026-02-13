@@ -12,6 +12,13 @@ let lastScannedId = null;
 const exitTimers = {}; // { log_id: timerId }
 let isNavigating = false; // 画面遷移中フラグ
 let globalEventSource = null; // SSE接続管理用
+let myClientId = localStorage.getItem('appClientId');
+
+if (!myClientId) {
+    // 簡易的なUUID生成
+    myClientId = 'client-' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    localStorage.setItem('appClientId', myClientId);
+}
 
 // ページ離脱時にリソースを解放する
 window.addEventListener('beforeunload', () => {
@@ -95,6 +102,12 @@ function initializePage() {
         processOfflineQueue();
         updateNetworkStatusUI(); // 追加: UI更新
         checkServerHealth();     // 追加: 復帰時に即座にサーバー状態を確認
+        
+        // 【追加】復帰時にサーバー側の未送信メールも即時再送させる
+        fetch('/api/trigger_email_retry', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => console.log('Email retry triggered:', data.message))
+            .catch(err => console.error('Email retry trigger failed:', err));
     });
     
     // オフライン時UI更新
@@ -1361,10 +1374,13 @@ async function processOfflineQueue() {
             const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
             try {
+                // 【修正】オフライン同期であることを示すフラグを追加して送信
+                const syncPayload = { ...item.payload, is_offline_sync: true };
+
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(item.payload),
+                    body: JSON.stringify(syncPayload),
                     signal: controller.signal // タイムアウト適用
                 });
                 clearTimeout(timeoutId);
@@ -1412,7 +1428,8 @@ function setupSSE() {
     if (globalEventSource) {
         globalEventSource.close();
     }
-    globalEventSource = new EventSource('/api/stream');
+    // クライアントIDを付与して接続
+    globalEventSource = new EventSource(`/api/stream?client_id=${encodeURIComponent(myClientId)}`);
     
     globalEventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
