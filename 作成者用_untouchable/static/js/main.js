@@ -212,8 +212,15 @@ function updateTime() {
  */
 // 修正: キャッシュ回避のためにタイムスタンプ(?t=...)を付与
 async function fetchInitialData() {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2秒でタイムアウト
+
     try {
-        const response = await fetch(`/api/initial_data?t=${new Date().getTime()}`);
+        const response = await fetch(`/api/initial_data?t=${new Date().getTime()}`, {
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
         
@@ -229,7 +236,9 @@ async function fetchInitialData() {
         populateGradeSelect();
         renderAttendanceTable();
     } catch (error) {
-        console.error('初期データの読み込みに失敗しました:', error);
+        clearTimeout(timeoutId);
+        const isTimeout = error.name === 'AbortError';
+        console.error(isTimeout ? '初期データ取得タイムアウト:' : '初期データ取得エラー:', error);
         
         // 【追加】通信エラー時はキャッシュからの読み込みを試みる
         const cached = localStorage.getItem('cachedStudentsData');

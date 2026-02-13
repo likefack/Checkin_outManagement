@@ -430,7 +430,11 @@ def check_out():
     try:
         if log_id and not system_id:
             id_row = conn.execute('SELECT system_id FROM attendance_logs WHERE id = ?', (log_id,)).fetchone()
-            if not id_row: return jsonify({'status': 'error', 'message': '該当の記録が見つかりません。'}), 404
+            if not id_row: 
+                # ログが見つからない場合、DBリセット等の可能性がある。
+                # エラーにするとクライアントのキューが詰まるため、成功扱いにして無視させる。
+                app.logger.warning(f"[不整合ログ] 退室試行されたログID {log_id} が見つかりません。無視します。")
+                return jsonify({'status': 'success', 'message': '記録が見つかりませんでしたが、処理をスキップしました。'}), 200
             system_id = id_row['system_id']
 
         student = conn.execute('SELECT name, title FROM students WHERE system_id = ?', (system_id,)).fetchone()
