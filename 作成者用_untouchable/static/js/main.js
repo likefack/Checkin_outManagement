@@ -805,6 +805,25 @@ function initiateExitProcess(button) {
         } else {
             clearInterval(exitTimers[logId]);
             delete exitTimers[logId];
+            
+            // ボタンを無効化（連打防止）は即座に行う
+            button.disabled = true;
+            button.classList.remove('undo-btn');
+            button.style.opacity = '0.7';
+            // テキストは即座に変えず、一旦そのままにする（または「取消」のまま）
+
+            // 【修正】高速応答時の「処理中」のちらつきを防ぐため、
+            // 200ms以上時間がかかっている場合のみ「処理中...」と表示する
+            const processingTimer = setTimeout(() => {
+                // まだボタンがDOM上に存在する場合のみテキスト変更
+                if (button && button.isConnected) {
+                    button.textContent = '処理中...';
+                }
+            }, 200);
+
+            // 通信処理を実行
+            // finalizeExitは非同期関数なので、完了時（成功して行が消えるか、エラーで残るか）にタイマーをクリアしても良いが、
+            // 成功時は行ごと消えるため button.isConnected が false になり、上記タイマーは安全に無視される。
             finalizeExit(logId, systemId, pressedAt);
         }
     }, 1000);
@@ -831,27 +850,25 @@ async function finalizeExit(logId, systemId, exitTime) {
 
     // オフライン判定（ローカル環境なら無視して通信試行）
     if (!navigator.onLine && !IS_LOCALHOST) {
-        // 退室時はstudentオブジェクトが直接参照できないため、IDから名前を探すヘルパーを利用
         const studentName = findStudentNameBySystemId(systemId) || "退室";
         saveToOfflineQueue('check_out', payload, `${studentName}さんの退室を受け付けました (オフライン)`);
 
-        // 即座にUI上のステータスを更新する
         const sObj = findStudentObjectBySystemId(systemId);
         if (sObj) {
             sObj.is_present = false;
             sObj.current_log_id = null;
         }
 
-        // 【修正】オフライン時はボタンの表示を「同期待ち」に変更し、操作を無効化する
-        // これにより「取消 (1s)」などの表示で止まってしまうのを防ぐ
         const row = dom.attendanceTableBody.querySelector(`tr[data-log-id="${logId}"]`);
         if (row) {
             const btn = row.querySelector('button');
             if (btn) {
+                // 修正: ボタンの状態を一貫して「同期待ち」に更新する
                 btn.textContent = '同期待ち';
                 btn.disabled = true;
-                btn.classList.remove('undo-btn'); // 黄色のスタイルを解除
-                btn.style.opacity = '0.7';        // 無効化を視覚的に表現
+                btn.classList.remove('undo-btn');
+                btn.classList.add('offline-pending-btn'); // オフライン用のスタイルを適用（任意）
+                btn.style.opacity = '0.7';
             }
         }
         return;
