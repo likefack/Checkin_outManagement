@@ -23,6 +23,8 @@ window.addEventListener('beforeunload', () => {
 // 通信タイムアウト設定 (ms)
 const FETCH_TIMEOUT_MS = 3000; // 3秒で諦めて保存
 const SLOW_REQUEST_NOTIFY_MS = 1500; // 1.5秒経過したら「通信中」と表示
+// ローカル環境判定（127.0.0.1 または localhost の場合はtrue）
+const IS_LOCALHOST = ['127.0.0.1', 'localhost'].includes(location.hostname);
 
 // オフライン送信待ちキュー（ローカルストレージから読み込み）
 let offlineQueue = JSON.parse(localStorage.getItem('offlineQueue')) || [];
@@ -112,7 +114,8 @@ function initializePage() {
 
     // 【追加】サーバー復帰監視：キューがある場合、5秒ごとに送信を試みる
     setInterval(() => {
-        if (navigator.onLine && offlineQueue.length > 0 && !isSyncing) {
+        // オンラインまたはローカル環境なら試行する
+        if ((navigator.onLine || IS_LOCALHOST) && offlineQueue.length > 0 && !isSyncing) {
             console.log("サーバー復帰確認のため、キューの同期を試みます...");
             processOfflineQueue();
         }
@@ -389,10 +392,11 @@ function updateNetworkStatusUI() {
 
 async function checkServerHealth() {
     if (!dom.sidebarServerStatus) return;
-    if (!navigator.onLine) {
-        // オフライン時はサーバーの状態は「不明」とする
+    // オフラインかつ、ローカル環境でない場合のみ「不明」とする
+    // (ローカル環境なら、ブラウザがオフライン判定でも通信できる可能性があるため試行する)
+    if (!navigator.onLine && !IS_LOCALHOST) {
         dom.sidebarServerStatus.textContent = '不明';
-        dom.sidebarServerStatus.style.color = '#6c757d'; // グレー
+        dom.sidebarServerStatus.style.color = '#6c757d';
         return;
     }
 
@@ -565,8 +569,8 @@ async function handleManualEntry() {
 
     const payload = { system_id: student.system_id, seat_number: seatNumber };
 
-    // オフライン判定
-    if (!navigator.onLine) {
+    // オフライン判定（ローカル環境なら無視して通信試行）
+    if (!navigator.onLine && !IS_LOCALHOST) {
         saveToOfflineQueue('check_in', payload, `${student.name}さんの入室を受け付けました (オフライン)`);
         // 即座にUI上のステータスを更新する
         student.is_present = true;
@@ -651,7 +655,8 @@ async function processQrId(rawId) {
 
     const payload = { system_id: normalizedId };
 
-    if (!navigator.onLine) {
+    // オフライン判定（ローカル環境なら無視して通信試行）
+    if (!navigator.onLine && !IS_LOCALHOST) {
         payload.timestamp = new Date().toISOString();
         const studentName = findStudentNameBySystemId(normalizedId) || `ID:${normalizedId}`;
         saveToOfflineQueue('qr_process', payload, `${studentName}さんの入退室を受け付けました (オフライン)`);
@@ -766,8 +771,8 @@ function cancelExitProcess(button) {
 async function finalizeExit(logId, systemId, exitTime) {
     const payload = { log_id: logId, system_id: systemId, exit_time: exitTime };
 
-    // オフライン判定
-    if (!navigator.onLine) {
+    // オフライン判定（ローカル環境なら無視して通信試行）
+    if (!navigator.onLine && !IS_LOCALHOST) {
         // 退室時はstudentオブジェクトが直接参照できないため、IDから名前を探すヘルパーを利用
         const studentName = findStudentNameBySystemId(systemId) || "退室";
         saveToOfflineQueue('check_out', payload, `${studentName}さんの退室を受け付けました (オフライン)`);
@@ -1322,8 +1327,8 @@ function saveToOfflineQueue(actionType, payload, toastMessage = null) {
  * オフラインキューに溜まったデータを順次送信する
  */
 async function processOfflineQueue() {
-    // 既に実行中、キューが空、またはオフラインの場合は何もしない
-    if (isSyncing || offlineQueue.length === 0 || !navigator.onLine) return;
+    // 既に実行中、キューが空、または（オフラインかつローカルでない）場合は何もしない
+    if (isSyncing || offlineQueue.length === 0 || (!navigator.onLine && !IS_LOCALHOST)) return;
 
     isSyncing = true; // ロック開始
 
