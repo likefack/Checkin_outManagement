@@ -139,7 +139,7 @@ def index():
         subject = request.form.get('subject')
         sub_category = request.form.get('sub_category')
         submit_button = request.form.get('submit_button')
-        client_id = request.form.get('client_id') # ★★★ 変更点1: client_id をフォームから取得 ★★★
+        client_id = request.form.get('client_id') #  変更点1: client_id をフォームから取得 
         
         if not all([grade, class_num, student_num, seat_num, subject, sub_category]):
             error_message = "学年、組、番号、席番号、質問内容、小区分は必ず入力してください！"
@@ -171,7 +171,7 @@ def index():
         db = get_db()
         cursor = db.cursor()
         
-        # ★★★ 変更点2: INSERT文に client_id を追加 ★★★
+        #  変更点2: INSERT文に client_id を追加 
         cursor.execute("""
             INSERT INTO questions (grade, class_num, student_num, seat_num, problem_num, subject, sub_category, details, image_path, status, submission_type, client_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -278,10 +278,10 @@ def api_sub_categories(subject):
 @app.route('/api/check_new_questions')
 def api_check_new_questions():
     last_id = request.args.get('since_id', 0, type=int)
-    client_id = request.args.get('client_id', '') # ★★★ 変更点3: client_id を受け取る ★★★
+    client_id = request.args.get('client_id', '') #  変更点3: client_id を受け取る 
     
     db = get_db()
-    # ★★★ 変更点4: 自分のclient_idが付いた質問は除外してカウント ★★★
+    #  変更点4: 自分のclient_idが付いた質問は除外してカウント 
     new_count = db.execute(
         "SELECT COUNT(id) FROM questions WHERE id > ? AND (client_id IS NULL OR client_id != ?)", 
         (last_id, client_id)

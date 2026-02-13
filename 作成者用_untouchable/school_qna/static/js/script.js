@@ -135,8 +135,6 @@ const unlockAudio = () => {
         console.warn("音声のロック解除試行に失敗。次の操作で再試行します。");
     });
 };
-// ★★★ 修正ここまで ★★★
-
 
 // --- メインの処理 (ページ読み込み完了時に実行) ---
 document.addEventListener('DOMContentLoaded', function() {
@@ -422,7 +420,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // ★★★ 変更点: 音声ロック解除のリスナーをここに追加 ★★★
+    //  変更点: 音声ロック解除のリスナーをここに追加 
     document.body.addEventListener('click', unlockAudio);
     document.body.addEventListener('touchstart', unlockAudio, { passive: true });
 
@@ -513,7 +511,7 @@ function initializeNotifier() {
                     document.title = `新しい質問 (${newQuestionCount})`;
                     createOrUpdateNotificationBanner();
                     
-                    // ★★★ 変更点: グローバル変数を使って再生を試みる ★★★
+                    //  変更点: グローバル変数を使って再生を試みる 
                     if (isAudioUnlocked) {
                         notificationSound.play().catch(error => {
                             console.warn("音声の再生に失敗しました。", error);

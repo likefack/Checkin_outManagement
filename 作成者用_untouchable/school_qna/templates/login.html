@@ -6,7 +6,7 @@
 <div class="login-container">
     <h1>{{ title }}</h1>
 
-    {# ★★★ 変更点: formのアクションにnextパラメータを追加 ★★★ #}
+    {#  変更点: formのアクションにnextパラメータを追加  #}
     <form method="POST" action="{{ url_for('school_qna.login', next=request.args.get('next', '')) }}">
         <div class="form-group">
             <label for="password">パスワード:</label>

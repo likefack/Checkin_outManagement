@@ -232,8 +232,8 @@ body {
 
 .header-controls { display: flex; justify-content: space-between; align-items: center; }
 .report-section, .nav-buttons { display: flex; align-items: center; gap: 10px; }
-.header-btn, #create-report-btn { padding: 8px 15px; border: none; border-radius: 5px; background-color: var(--primary-color); color: white; font-size: 0.9em; cursor: pointer; transition: background-color 0.2s; }
-.header-btn:hover, #create-report-btn:hover { background-color: #357abd; }
+.header-btn, #create-report-btn { padding: 8px 15px; border: none; border-radius: 5px; background-color: var(--primary-color); color: white; font-size: 0.9em; cursor: pointer; transition: filter 0.2s; }
+.header-btn:hover, #create-report-btn:hover { filter: brightness(0.9); }
 #report-period { padding: 8px; border: 1px solid var(--border-color); border-radius: 5px; min-width: 160px; }
 
 /* --- メインコンテンツ (スクロールエリア) --- */

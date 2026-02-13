@@ -181,7 +181,6 @@ th {
     margin-left: 5px; /* ラベルとの間に少し余白 */
 }
 
-/* ★★★ ここからが修正箇所 ★★★ */
 /* 写真プレビュー用のスタイル */
 .image-preview-container {
     display: grid; /* レイアウトをCSS Gridに変更 */
@@ -195,7 +194,6 @@ th {
     justify-content: start;
     max-width: 450px;
 }
-/* ★★★ 修正ここまで ★★★ */
 
 .preview-item {
     position: relative;

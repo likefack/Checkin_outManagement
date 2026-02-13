@@ -1,0 +1,76 @@
+<aside id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+        <h2>自習室業務支援システム</h2>
+        <button id="sidebar-close" class="sidebar-close">×</button>
+    </div>
+    
+    <div class="sidebar-status-card">
+        <div class="status-item">
+            <span class="status-label">現在のモード:</span>
+            <span class="status-value mode-badge" id="sidebar-mode-display">--</span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">ネットワーク:</span>
+            <span class="status-value" id="sidebar-network-status"><span class="status-dot"></span> <span id="network-text">判定中</span></span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">サーバー通信:</span>
+            <span class="status-value" id="sidebar-server-status">待機中</span>
+        </div>
+    </div>
+
+    <nav class="sidebar-nav">
+        <ul>
+            <li>
+                <a href="/" class="{% if request.path == '/' %}active{% endif %}">入退室管理システム</a>
+                <ul class="sidebar-sub-nav">
+                    <li><a href="/?mode=students" class="{% if mode == 'students' or (request.path == '/' and not mode) %}active-mode{% endif %}">通常モード (生徒用)</a></li>
+                    <li><a href="/?mode=scanner" class="{% if mode == 'scanner' %}active-mode{% endif %}">スキャナーモード</a></li>
+                    <li><a href="/?mode=admin" class="{% if mode == 'admin' %}active-mode{% endif %}">管理者モード</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="/qna/" class="{% if request.path.startswith('/qna') %}active{% endif %}">質問管理システム</a>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="sidebar-actions">
+        <button id="open-settings-btn" class="sidebar-action-btn">⚙ システム設定</button>
+    </div>
+
+    <div class="sidebar-footer">
+        <p>Version 1.1.0</p>
+        <p>&copy; 2026 Codeswitcher Co.,Ltd.</p>
+    </div>
+</aside>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+<div id="settings-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+        <h2>システム設定</h2>
+        <p style="font-size: 0.9em; color: #666; margin-bottom: 15px;">※変更を反映するにはサーバー再起動が必要な場合があります。</p>
+        <form id="settings-form">
+            <div class="form-group">
+                <label>アプリケーション名</label>
+                <input type="text" name="APP_NAME" placeholder="入退室管理システム">
+            </div>
+            <div class="form-group">
+                <label>組織名 (日本語)</label>
+                <input type="text" name="ORGANIZATION_NAME" placeholder="〇〇塾">
+            </div>
+            <div class="form-group">
+                <label>組織名 (英語/Copyright用)</label>
+                <input type="text" name="ORGANIZATION_NAME_ENG" placeholder="Organization Inc.">
+            </div>
+            <div class="form-group">
+                <label>最大座席数</label>
+                <input type="number" name="MAX_SEAT_NUMBER" placeholder="72">
+            </div>
+            <div class="modal-actions">
+                <button type="button" id="close-settings-btn">キャンセル</button>
+                <button type="submit" class="enter-btn">保存</button>
+            </div>
+        </form>
+    </div>
+</div>

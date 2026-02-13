@@ -12,7 +12,7 @@ def init_db():
         conn = sqlite3.connect(DATABASE)
         cursor = conn.cursor()
         
-        # ★★★ 変更点1: CREATE TABLE文に client_id を追加 ★★★
+        #  変更点1: CREATE TABLE文に client_id を追加 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS questions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,14 +41,14 @@ def init_db():
         if 'problem_num' not in columns:
             cursor.execute("ALTER TABLE questions ADD COLUMN problem_num TEXT")
         
-        # ★★★ 変更点2: client_id カラムの存在チェックと追加 ★★★
+        #  変更点2: client_id カラムの存在チェックと追加 
         if 'client_id' not in columns:
             cursor.execute("ALTER TABLE questions ADD COLUMN client_id TEXT")
             print("カラム 'client_id' を questions テーブルに追加しました。")
 
         conn.commit()
         
-        print(f"データベースの準備ができました！ (場所: {DATABASE})")
+        print(f"データベースの準備が完了しました (場所: {DATABASE})")
     except sqlite3.Error as e:
         print(f"データベースで問題発生: {e} ")
     finally:

@@ -92,8 +92,19 @@ function initializePage() {
     window.addEventListener('online', () => {
         processOfflineQueue();
         updateNetworkStatusUI(); // 追加: UI更新
+        checkServerHealth();     // 追加: 復帰時に即座にサーバー状態を確認
     });
-    window.addEventListener('offline', updateNetworkStatusUI); // 追加: オフライン時UI更新
+    
+    // オフライン時UI更新
+    window.addEventListener('offline', () => {
+        updateNetworkStatusUI();
+        // オフラインになった瞬間はサーバー状態を「不明」に切り替える
+        if (dom.sidebarServerStatus) {
+            dom.sidebarServerStatus.textContent = '不明';
+            dom.sidebarServerStatus.style.color = '#6c757d'; // グレー
+        }
+    });
+
     // ページ読み込み時に未送信があれば処理を試みる
     if (navigator.onLine && offlineQueue.length > 0) {
         processOfflineQueue();
@@ -329,7 +340,7 @@ function setupSidebarLogic() {
     updateNetworkStatusUI();
 
     // 3. サーバー通信チェック（定期実行）
-    setInterval(checkServerHealth, 30000); // 30秒ごとにチェック
+    setInterval(checkServerHealth, 5000); // 5秒ごとにチェック
     checkServerHealth(); // 初回実行
 
     // 4. 設定モーダルのイベントリスナー
@@ -379,8 +390,9 @@ function updateNetworkStatusUI() {
 async function checkServerHealth() {
     if (!dom.sidebarServerStatus) return;
     if (!navigator.onLine) {
-        dom.sidebarServerStatus.textContent = '通信不可';
-        dom.sidebarServerStatus.style.color = 'var(--danger-color)';
+        // オフライン時はサーバーの状態は「不明」とする
+        dom.sidebarServerStatus.textContent = '不明';
+        dom.sidebarServerStatus.style.color = '#6c757d'; // グレー
         return;
     }
 

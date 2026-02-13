@@ -122,7 +122,7 @@ def append_to_history(question_id):
         "即時対応の可否"
     ]
     
-    # ★★★ 変更点1: Excelのヘッダー定義を修正 ★★★
+    #  変更点1: Excelのヘッダー定義を修正 
     HEADER_EXCEL = ["ID", "受付日時", "学年", "組", "番号", "席番号", "問題番号", "氏名", "質問内容", "小区分", "画像ファイル名", "送信方法", "処理日時"]
 
     conn_db = None
@@ -159,7 +159,7 @@ def append_to_history(question_id):
                 sheet_xlsx.append(HEADER_EXCEL)
                 print(f"{os.path.basename(HISTORY_FILE_XLSX)} を新規作成し、ヘッダーを書き込みました。")
             
-            # ★★★ 変更点2: Excelの行データから「補足」を削除 ★★★
+            #  変更点2: Excelの行データから「補足」を削除 
             row_data_excel = [
                 question['id'], 
                 question['created_at'], 
