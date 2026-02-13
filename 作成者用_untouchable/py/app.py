@@ -425,7 +425,8 @@ def check_in():
             
             # 【追加】日付チェック：現在の日付（JST）とリクエストの日付（JST）が一致する場合のみ在室フラグを立てる
             # JSTタイムゾーンを定義（UTC+9）
-            JST = datetime.timezone(datetime.timedelta(hours=9))
+            # 修正: ここでJSTを定義すると関数全体でローカル変数扱いとなり、上部の参照箇所でエラーになるため削除（グローバルのJSTを使用）
+            # JST = datetime.timezone(datetime.timedelta(hours=9))
             entry_date_jst = entry_time_utc.astimezone(JST).date()
             current_date_jst = datetime.datetime.now(JST).date()
 
@@ -460,7 +461,9 @@ def check_in():
         return jsonify({'status': 'success', 'message': msg, 'rank': final_rank, 'achievement': ach_result, 'log_data': log_data})
 
     except Exception as e:
-        conn.rollback(); return jsonify({'status': 'error', 'message': f'データベースエラー: {e}'}), 500
+        conn.rollback()
+        app.logger.error(f"入室処理エラー: {e}", exc_info=True) # エラー詳細をログに出力
+        return jsonify({'status': 'error', 'message': f'データベースエラー: {e}'}), 500
     finally:
         conn.close()
 
