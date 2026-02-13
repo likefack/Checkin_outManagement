@@ -24,8 +24,44 @@ from email_sender import send_email_async, retry_queued_emails
 # 簡易的に、sys.pathを追加する方法をとります。
 import sys
 import os
+import glob # 追加
 sys.path.append(os.path.join(os.path.dirname(__file__), '..')) 
 from school_qna import school_qna_bp
+
+# 【追加】指定日数より古いログファイルを削除する関数
+def cleanup_old_logs(log_dir, retention_days=30):
+    try:
+        # 現在時刻から保存期間を引いた日時を計算
+        cutoff_date = datetime.datetime.now() - datetime.timedelta(days=retention_days)
+        
+        # 削除対象のパターンリスト (ログ本体 と ロックファイル)
+        patterns = [
+            os.path.join(log_dir, 'server_*.log*'),      # ログファイル
+            os.path.join(log_dir, '.__server_*.lock')    # ロックファイル
+        ]
+        
+        for pattern in patterns:
+            for target_file in glob.glob(pattern):
+                if not os.path.isfile(target_file):
+                    continue
+                    
+                # ファイルの最終更新日時を取得
+                file_mtime = datetime.datetime.fromtimestamp(os.path.getmtime(target_file))
+                
+                # 保存期間より古い場合は削除
+                if file_mtime < cutoff_date:
+                    try:
+                        os.remove(target_file)
+                        # ロックファイルの削除はログに残さなくても良いが、念のためinfoレベルで記録
+                        # (ただしロックファイル削除のログを、そのロックされていたログファイルに書こうとすると競合の恐れがあるため、
+                        #  ロックファイル削除時はコンソール出力か、エラー時のみログ出力にするのが無難ですが、
+                        #  ここでは統一してinfo出力とします)
+                        logging.getLogger().info(f"[システムログ] 古いファイルを削除しました: {os.path.basename(target_file)}")
+                    except OSError as e:
+                        logging.getLogger().warning(f"[警告] ファイル削除失敗: {e}")
+    except Exception as e:
+        # まだロガー設定前などの可能性も考慮し、標準出力にも出しておく
+        print(f"[警告] ログクリーンアップ処理エラー: {e}")
 
 # 【追加】ポーリング系のログを除外するフィルタークラス
 class PollingLogFilter(logging.Filter):
@@ -121,6 +157,9 @@ def configure_logging(app):
     # これにより「アプリで出力」→「ルートでも出力」という重複を防ぐ
     app.logger.handlers = []
     logging.getLogger('werkzeug').handlers = []
+
+    # 【追加】古いログファイルの自動削除実行 (デフォルト30日保存)
+    cleanup_old_logs(log_dir, retention_days=30)
 
 # ログ設定を適用
 configure_logging(app)

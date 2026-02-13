@@ -37,6 +37,8 @@ const IS_LOCALHOST = ['127.0.0.1', 'localhost'].includes(location.hostname);
 let offlineQueue = JSON.parse(localStorage.getItem('offlineQueue')) || [];
 // 同期処理中かどうかのフラグ
 let isSyncing = false;
+// サーバー通信状態のフラグ
+let isServerOnline = true;
 
 // --- DOM要素の取得 ---
 const dom = {
@@ -457,12 +459,20 @@ async function checkServerHealth() {
         clearTimeout(timeoutId);
 
         if (res.ok) {
+            if (!isServerOnline) {
+                showToast("サーバーとの通信が復旧しました");
+                isServerOnline = true;
+            }
             dom.sidebarServerStatus.textContent = '正常';
             dom.sidebarServerStatus.style.color = '#28a745';
         } else {
             throw new Error('Status not OK');
         }
     } catch (e) {
+        if (isServerOnline) {
+            showToast("警告: サーバーとの通信が切断されました");
+            isServerOnline = false;
+        }
         dom.sidebarServerStatus.textContent = 'エラー';
         dom.sidebarServerStatus.style.color = 'var(--danger-color)';
     }
