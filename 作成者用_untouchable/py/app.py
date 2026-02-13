@@ -113,6 +113,10 @@ def configure_logging(app):
     root_logger.addHandler(stream_handler)
     root_logger.setLevel(logging.INFO)
 
+    # 【追加】APSchedulerの定期実行ログを抑制
+    # これにより "Running job..." 等のログは出なくなり、エラー時のみ記録されます
+    logging.getLogger('apscheduler').setLevel(logging.WARNING)
+
     # アプリやWerkzeugのロガーは、独自のハンドラを持たせずルートへ伝播させる
     # これにより「アプリで出力」→「ルートでも出力」という重複を防ぐ
     app.logger.handlers = []
@@ -947,7 +951,7 @@ def stream():
                     yield ": keep-alive\n\n"
         except GeneratorExit:
             # クライアント切断時（タブを閉じる、リロードなど）
-            app.logger.info(f"[通信ログ] クライアント切断検知 - IP: {client_ip}, ID: {client_id}")
+            # 切断ログはノイズになるため出力しない
             if q in sse_clients:
                 sse_clients.remove(q)
         except Exception as e:

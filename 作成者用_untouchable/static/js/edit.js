@@ -24,6 +24,14 @@ let isNavigating = false; // ページ遷移中
 let isLoading = false;    // データ取得中
 let globalEventSource = null; // SSE接続管理用
 
+// 【追加】クライアントIDの取得（main.jsと共通のIDを使用）
+let myClientId = localStorage.getItem('appClientId');
+if (!myClientId) {
+    // IDがない場合（編集画面から直接アクセスした場合など）は生成
+    myClientId = 'client-' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    localStorage.setItem('appClientId', myClientId);
+}
+
 // ページ離脱時にリソースを解放する
 window.addEventListener('beforeunload', () => {
     if (globalEventSource) {
@@ -498,7 +506,8 @@ function setupSSE() {
     if (globalEventSource) {
         globalEventSource.close();
     }
-    globalEventSource = new EventSource('/api/stream');
+    // 【修正】クライアントIDを付与して接続
+    globalEventSource = new EventSource(`/api/stream?client_id=${encodeURIComponent(myClientId)}`);
     
     globalEventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
