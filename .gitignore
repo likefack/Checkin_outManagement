@@ -1,6 +1,7 @@
 作成者用_untouchable/students.db
 作成者用_untouchable/py/__pycache__/report_generator.cpython-313.pyc
 管理者用_touchable/logs/集計レポート_*.xlsx
+管理者用_touchable/logs/~$集計レポート_*.xlsx
 管理者用_touchable/.env
 作成者用_untouchable/students.db
 students.db
@@ -27,3 +28,4 @@ questions.db
 管理者用_touchable/質問履歴/質問履歴_for_import.csv
 管理者用_touchable/質問履歴/質問履歴.xlsx
 管理者用_touchable/質問画像/*_image.jpg
+

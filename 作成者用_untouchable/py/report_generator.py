@@ -82,6 +82,26 @@ def create_report(db_path, start_date_str, end_date_str):
         
         df = df.sort_values(by='entry_time') # 入室時間が早い順に並び替え（シート0で最初の記録を取得するために必要）
 
+        # 【追加】ファイルがロックされている（開かれている）場合に別名を生成する処理
+        base_name, ext = os.path.splitext(file_name)
+        counter = 1
+        while True:
+            try:
+                # ファイルが存在する場合のみロックチェックを行う
+                if os.path.exists(file_path):
+                    # 追記モードで開いてみることでロック状態を確認
+                    # WindowsではExcelで開いているファイルに対して PermissionError が発生する
+                    with open(file_path, 'a'):
+                        pass
+                # エラーが出なければ書き込み可能（またはファイルが存在しない）なのでループを抜ける
+                break
+            except PermissionError:
+                # ロックされている場合は連番を付与して再試行
+                logger.warning(f"ファイル {os.path.basename(file_path)} はロックされています。別名での保存を試みます。")
+                new_name = f"{base_name}_{counter}{ext}"
+                file_path = os.path.join(report_dir, new_name)
+                counter += 1
+
         with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
             
             # --- シート0: 日報人数カウント用 ---

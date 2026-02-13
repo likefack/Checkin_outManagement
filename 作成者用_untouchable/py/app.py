@@ -114,8 +114,8 @@ def configure_logging(app):
     root_logger.setLevel(logging.INFO)
 
     # 【追加】APSchedulerの定期実行ログを抑制
-    # これにより "Running job..." 等のログは出なくなり、エラー時のみ記録されます
-    logging.getLogger('apscheduler').setLevel(logging.WARNING)
+    # WARNINGレベルの「実行遅延（遅刻）」も無視し、本当に動かなくなった時（ERROR）だけ出すように設定
+    logging.getLogger('apscheduler').setLevel(logging.ERROR)
 
     # アプリやWerkzeugのロガーは、独自のハンドラを持たせずルートへ伝播させる
     # これにより「アプリで出力」→「ルートでも出力」という重複を防ぐ

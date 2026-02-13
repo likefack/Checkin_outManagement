@@ -84,6 +84,25 @@ const dom = {
  * @description ページの初期化を行うメイン関数
  */
 function initializePage() {
+    // 【追加】モードの永続化ロジック
+    // 1. URLパラメータに mode があるかチェック
+    const urlParams = new URLSearchParams(window.location.search);
+    const modeInUrl = urlParams.get('mode');
+
+    if (modeInUrl) {
+        // URLで指定がある場合は、それを次回用に保存する
+        localStorage.setItem('preferredMode', modeInUrl);
+    } else {
+        // URLで指定がない場合（ルートアクセス時など）、保存されたモードがあれば復元する
+        const savedMode = localStorage.getItem('preferredMode');
+        // 保存されたモードがあり、かつデフォルト('students')と異なる場合はリダイレクト
+        // (デフォルトが 'students' 前提のロジックです)
+        if (savedMode && savedMode !== 'students' && savedMode !== 'null') {
+            window.location.search = `?mode=${savedMode}`;
+            return; // リダイレクトするので以降の処理は中断
+        }
+    }
+
     setupSSE();
     updateTime();
     setInterval(updateTime, 1000);
