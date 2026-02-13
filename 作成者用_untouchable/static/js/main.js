@@ -22,7 +22,7 @@ window.addEventListener('beforeunload', () => {
 }); 
 // 通信タイムアウト設定 (ms)
 const FETCH_TIMEOUT_MS = 3000; // 3秒で諦めて保存
-const SLOW_REQUEST_NOTIFY_MS = 1500; // 1.5秒経過したら「通信中」と表示
+const SLOW_REQUEST_NOTIFY_MS = 500; // 0.5秒経過したら「通信中」と表示
 // ローカル環境判定（127.0.0.1 または localhost の場合はtrue）
 const IS_LOCALHOST = ['127.0.0.1', 'localhost'].includes(location.hostname);
 
@@ -100,10 +100,17 @@ function initializePage() {
     // オフライン時UI更新
     window.addEventListener('offline', () => {
         updateNetworkStatusUI();
-        // オフラインになった瞬間はサーバー状態を「不明」に切り替える
-        if (dom.sidebarServerStatus) {
+        
+        // ローカル環境でない場合のみ、サーバー状態を「不明」に切り替える
+        // (ローカル環境なら、回線断でもサーバー(自分自身)とは通信できる可能性があるため表示を維持する)
+        if (!IS_LOCALHOST && dom.sidebarServerStatus) {
             dom.sidebarServerStatus.textContent = '不明';
             dom.sidebarServerStatus.style.color = '#6c757d'; // グレー
+        }
+        
+        // ローカル環境の場合は、念のため即座にヘルスチェックを走らせて実態を確認する
+        if (IS_LOCALHOST) {
+            checkServerHealth();
         }
     });
 

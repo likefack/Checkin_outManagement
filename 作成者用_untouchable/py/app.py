@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 import database
 from report_generator import create_report
 from achievement_logic import check_achievements
-from email_sender import send_email_async
+from email_sender import send_email_async, retry_queued_emails
 # 【追加】質問管理アプリのBlueprintをインポート
 # 注意: pyフォルダから見た相対パスでインポートできるようパスを通すか、
 # school_qnaフォルダをパッケージとして認識させる必要があります。
@@ -935,6 +935,14 @@ def stream():
                 sse_clients.remove(q)
 
     return Response(event_stream(), mimetype='text/event-stream')
+
+# --- 定期実行タスクの設定 ---
+scheduler = BackgroundScheduler()
+# 5分ごとに保留中のメール再送を試みる
+scheduler.add_job(retry_queued_emails, 'interval', minutes=5)
+scheduler.start()
+# アプリ終了時にスケジューラーを停止
+atexit.register(lambda: scheduler.shutdown())
 
 # --- サーバーの起動 ---
 if __name__ == '__main__':

@@ -51,6 +51,16 @@ def create_tables(conn):
         FOREIGN KEY (system_id) REFERENCES students(system_id)
     )
     ''')
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS email_queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        recipient TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        body TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        status TEXT DEFAULT 'pending'
+    )
+    ''')
     conn.commit()
     logger.info("データベースのテーブルを定義しました。")
 
