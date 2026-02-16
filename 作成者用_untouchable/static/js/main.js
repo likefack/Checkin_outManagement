@@ -35,6 +35,8 @@ const IS_LOCALHOST = ['127.0.0.1', 'localhost'].includes(location.hostname);
 
 // オフライン送信待ちキュー（ローカルストレージから読み込み）
 let offlineQueue = JSON.parse(localStorage.getItem('offlineQueue')) || [];
+// 同期エラー格納用リスト
+let syncErrors = JSON.parse(localStorage.getItem('syncErrors')) || [];
 // 同期処理中かどうかのフラグ
 let isSyncing = false;
 // サーバー通信状態のフラグ
@@ -120,6 +122,7 @@ function initializePage() {
     
     // オンライン復帰時にキューを処理するイベントリスナー
     window.addEventListener('online', () => {
+        showToast("オンラインに復帰しました。");
         processOfflineQueue();
         updateNetworkStatusUI(); // 追加: UI更新
         checkServerHealth();     // 追加: 復帰時に即座にサーバー状態を確認
@@ -133,6 +136,7 @@ function initializePage() {
     
     // オフライン時UI更新
     window.addEventListener('offline', () => {
+        showToast("オフラインになりました。一部の機能が制限されます。");
         updateNetworkStatusUI();
         
         // ローカル環境でない場合のみ、サーバー状態を「不明」に切り替える
@@ -784,6 +788,9 @@ function handleTableClick(event) {
         initiateExitProcess(target);
     } else if (target.classList.contains('undo-btn')) {
         cancelExitProcess(target);
+    } else if (target.classList.contains('offline-wait-btn')) {
+        // 同期待ちボタンクリック時のトースト表示
+        showToast("サーバーとの接続待機中です。接続回復時に自動送信されます。", null);
     }
 }
 
@@ -1297,7 +1304,8 @@ function renderAttendanceTable() {
             // 修正: オフライン待機中の場合は、時刻表示ではなく「同期待ち」ボタンを表示する仕様に変更
             // これにより、退室ボタンを押した直後の見た目の変化（ボタン変化）を優先させる
             if (student.is_offline_pending) {
-                actionCell.innerHTML = `<button class="offline-wait-btn" disabled>同期待ち</button>`;
+                // disabled属性を削除してクリックイベント（トースト通知用）を受け取れるようにする
+                actionCell.innerHTML = `<button class="offline-wait-btn">同期待ち</button>`;
             } else {
                 // 通常の退室済み表示
                 const exitTimeText = new Date(student.exit_time).toLocaleTimeString('ja-JP');
@@ -1561,16 +1569,41 @@ async function processOfflineQueue() {
                 // --- 結果判定 ---
                 if (response.ok) {
                     // ケース1: 成功 (200 OK)
+                    const result = await response.json();
                     console.log(`同期成功: ${item.action} (${item.id})`);
+                    
+                    // 【重要】入室が成功した場合、サーバーから発行された本物の log_id を
+                    // キュー内の後続のアクション（退室など）に適用する
+                    if (result.log_data && result.log_data.log_id) {
+                        const realId = result.log_data.log_id;
+                        offlineQueue.forEach(futureItem => {
+                            // まだ送信前のデータで、この仮IDを参照しているものがあれば書き換える
+                            if (futureItem.payload.log_id === item.id) {
+                                futureItem.payload.log_id = realId;
+                            }
+                        });
+                    }
+
                     offlineQueue.shift(); // 削除
                     hasChanges = true;
                 
                 } else if (response.status >= 400 && response.status < 600) {
-                    // ケース2: サーバー到達したがエラー (400 Bad Request, 500 Internal Server Error, 409 Conflictなど)
-                    // 仕様(A案): エラーデータは破棄して次へ進む
-                    // 409(Conflict)も含め、サーバー側で受け入れられなかったものはローカルから消す
-                    console.warn(`同期失敗 (サーバーエラー): ${response.status} - ${item.action}. データを破棄して次へ進みます。`);
-                    offlineQueue.shift(); // 削除
+                    // ケース2: サーバー到達したがエラー
+                    console.warn(`同期失敗 (サーバーエラー): ${response.status} - ${item.action}.`);
+                    
+                    if (response.status === 409) {
+                        // 409 Conflict は「既に処理済み」等の理由で安全に無視できるため、キューから削除する
+                        offlineQueue.shift();
+                    } else {
+                        // その他のエラーは「失敗リスト」に移動して保存する (サイレントドロップ防止)
+                        const failedItem = offlineQueue.shift();
+                        failedItem.error = {
+                            status: response.status,
+                            timestamp: new Date().toISOString()
+                        };
+                        syncErrors.push(failedItem);
+                        localStorage.setItem('syncErrors', JSON.stringify(syncErrors));
+                    }
                     hasChanges = true;
                 }
 
@@ -1588,7 +1621,13 @@ async function processOfflineQueue() {
 
         // 1件でも処理が進んだ（成功 or 破棄）なら、最新の状態を取得して画面をリフレッシュ
         if (hasChanges) {
-            showToast("データの同期が完了しました。");
+            if (syncErrors.length > 0) {
+                // エラーがある場合は警告色のトースト（bronze等を流用）で通知
+                showToast(`同期完了: ${syncErrors.length}件のエラーが発生しました。`, "bronze");
+                console.error("同期エラー一覧:", syncErrors);
+            } else {
+                showToast("データの同期が完了しました。");
+            }
             await fetchInitialData();
         }
 

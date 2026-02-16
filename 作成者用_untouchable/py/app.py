@@ -483,11 +483,30 @@ def check_out():
                 return jsonify({'status': 'success', 'message': '記録が見つかりませんでしたが、処理をスキップしました。'}), 200
             system_id = id_row['system_id']
 
-        student = conn.execute('SELECT name, title FROM students WHERE system_id = ?', (system_id,)).fetchone()
-        log_id_to_update = log_id if log_id else conn.execute('SELECT current_log_id FROM students WHERE system_id = ?', (system_id,)).fetchone()['current_log_id']
-        if not log_id_to_update: return jsonify({'status': 'error', 'message': '有効な退室記録が見つかりません。'}), 409
+        student = conn.execute('SELECT name, title, current_log_id FROM students WHERE system_id = ?', (system_id,)).fetchone()
+        
+        # --- 不整合対策の強化 ---
+        # 1. log_idが文字列（仮ID）であるか、指定がない場合はDB上の現在のログIDを使用する
+        db_current_log_id = student['current_log_id'] if student else None
+        is_temp_id = isinstance(log_id, str) and log_id.startswith('temp_')
+        
+        log_id_to_update = log_id
+        if is_temp_id or not log_id:
+            log_id_to_update = db_current_log_id
+        else:
+            # 指定されたlog_idがDBに実在するかチェック
+            exists = conn.execute('SELECT id FROM attendance_logs WHERE id = ?', (log_id,)).fetchone()
+            if not exists:
+                log_id_to_update = db_current_log_id
+
+        if not log_id_to_update:
+            return jsonify({'status': 'success', 'message': '退室対象の記録が見つかりませんでしたが、処理を終了しました。'}), 200
+
         log_to_exit = conn.execute('SELECT exit_time FROM attendance_logs WHERE id = ?', (log_id_to_update,)).fetchone()
-        if not log_to_exit: return jsonify({'status': 'error', 'message': f'内部エラー: ログID {log_id_to_update} が見つかりません。'}), 500
+        # 万が一ログが見つからない場合も500エラーでキューを止めず、スキップさせる
+        if not log_to_exit: 
+            app.logger.warning(f"退室対象ログ {log_id_to_update} が消失しています。")
+            return jsonify({'status': 'success', 'message': '記録が不整合のためスキップしました。'}), 200
         
         # 既に退室済みの場合
         if log_to_exit['exit_time']:

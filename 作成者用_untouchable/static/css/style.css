@@ -573,15 +573,14 @@ button.offline-wait-btn {
     background-color: var(--primary-color); /* メインカラー */
     color: white;
     border: 1px solid var(--primary-color);
-    cursor: default;          /* クリック不可カーソル */
-    font-size: 0.9em;
+    cursor: not-allowed;      /* 禁止カーソルに変更 */
     padding: 5px 10px;
     box-shadow: none;
-    opacity: 0.8;             /* 少し透過させて、通常のボタンと区別する（お好みで1.0にしてください） */
+    opacity: 0.4;             /* 透明度を下げて色褪せた感じにする */
 }
 button.offline-wait-btn:hover {
-    background-color: var(--primary-color); /* ホバーしても色を変えない */
-    opacity: 0.8;
+    background-color: var(--primary-color); 
+    opacity: 0.4;
 }
 
 /* トースト通知のスタイル拡張（既存にあれば統合、なければ追加） */
