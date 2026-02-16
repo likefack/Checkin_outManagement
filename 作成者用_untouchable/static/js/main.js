@@ -630,8 +630,9 @@ async function handleManualEntry() {
     // オフライン判定（ローカル環境なら無視して通信試行）
     if (!navigator.onLine && !IS_LOCALHOST) {
         saveToOfflineQueue('check_in', payload, `${student.name}さんの入室を受け付けました (オフライン)`);
-        // 即座にUI上のステータスを更新する
+        // フェーズ3修正: ローカル状態を更新し、テーブルを再描画
         student.is_present = true;
+        renderAttendanceTable(); // 即時反映
         return; // API通信は行わない
     }
 
@@ -668,8 +669,9 @@ async function handleManualEntry() {
         // 通信エラーまたはサーバーエラー時は、オフラインキューに保存して後で再送する
         saveToOfflineQueue('check_in', payload, `${student.name}さんの入室を保存しました (${errorMsg})`);
         
-        // 【重要】サーバーダウン時もローカルの状態を進める
+        // 【重要】サーバーダウン時もローカルの状態を進め、テーブルを再描画
         student.is_present = true;
+        renderAttendanceTable(); // 即時反映
     }
 }
 
@@ -728,6 +730,7 @@ async function processQrId(rawId) {
                 sObj.is_present = true;
             }
         }
+        renderAttendanceTable(); // フェーズ3修正: 再描画
         return;
     }
 
@@ -771,6 +774,7 @@ async function processQrId(rawId) {
                 sObj.is_present = true;
             }
         }
+        renderAttendanceTable(); // フェーズ3修正: 再描画
     }
 }
 
@@ -858,19 +862,9 @@ async function finalizeExit(logId, systemId, exitTime) {
             sObj.is_present = false;
             sObj.current_log_id = null;
         }
-
-        const row = dom.attendanceTableBody.querySelector(`tr[data-log-id="${logId}"]`);
-        if (row) {
-            const btn = row.querySelector('button');
-            if (btn) {
-                // 修正: ボタンの状態を一貫して「同期待ち」に更新する
-                btn.textContent = '同期待ち';
-                btn.disabled = true;
-                btn.classList.remove('undo-btn');
-                btn.classList.add('offline-pending-btn'); // オフライン用のスタイルを適用（任意）
-                btn.style.opacity = '0.7';
-            }
-        }
+        
+        // フェーズ3修正: renderAttendanceTableに一任するため、個別のDOM操作は削除
+        renderAttendanceTable();
         return;
     }
 
@@ -912,17 +906,8 @@ async function finalizeExit(logId, systemId, exitTime) {
             sObj.current_log_id = null;
         }
 
-        // オフライン時と同様にボタンの表示を「同期待ち」に変更し、操作を無効化する
-        const row = dom.attendanceTableBody.querySelector(`tr[data-log-id="${logId}"]`);
-        if (row) {
-            const btn = row.querySelector('button');
-            if (btn) {
-                btn.textContent = '同期待ち';
-                btn.disabled = true;
-                btn.classList.remove('undo-btn');
-                btn.style.opacity = '0.7';
-            }
-        }
+        // フェーズ3修正: renderAttendanceTableに一任
+        renderAttendanceTable();
     }
 }
 
@@ -1089,10 +1074,113 @@ function renderActionButton(type) {
     }
     dom.actionButtonContainer.appendChild(button);
 }
+
+/**
+ * フェーズ2追加: サーバーデータとオフライン操作をマージして表示用リストを作成する
+ */
+function getOptimisticAttendees() {
+    // 1. サーバーデータのディープコピーを作成（元データを汚さないため）
+    let optimisticList = JSON.parse(JSON.stringify(currentAttendees));
+
+    // 2. オフラインキューの操作を順次適用
+    offlineQueue.forEach(item => {
+        const payload = item.payload;
+        const sysId = payload.system_id;
+
+        if (item.action === 'check_in') {
+            // 入室: 新規レコードを追加
+            let studentInfo = { name: '不明', grade: '', class: '', student_number: '' };
+            
+            // 生徒マスタから情報を補完
+            if (sysId) {
+                const sObj = findStudentObjectBySystemId(sysId);
+                if (sObj) {
+                    studentInfo = {
+                        grade: sObj.grade,
+                        class: sObj.class,
+                        // 修正: findStudentObjectBySystemIdが返す student_number を使用
+                        student_number: sObj.student_number, 
+                        name: sObj.name
+                    };
+                }
+            }
+
+            const newRecord = {
+                log_id: item.id, // temp_idを表示用IDとして使用
+                system_id: sysId,
+                seat_number: payload.seat_number || 'QR', // 座席情報
+                entry_time: payload.entry_time,
+                exit_time: null,
+                ...studentInfo,
+                is_offline_pending: true // UI装飾用フラグ
+            };
+            optimisticList.push(newRecord);
+
+        } else if (item.action === 'check_out') {
+            // 退室: 既存レコード（サーバーデータ or オフライン追加データ）を探して更新
+            let record = null;
+            // 修正: log_idが存在する場合は、文字列変換して厳密に比較
+            if (payload.log_id) {
+                record = optimisticList.find(r => String(r.log_id) === String(payload.log_id));
+            }
+            // log_idで見つからない、または指定がない場合はsystem_idで「現在入室中」のものを探す
+            if (!record && sysId) {
+                record = optimisticList.find(r => String(r.system_id) === String(sysId) && !r.exit_time);
+            }
+
+            if (record) {
+                record.exit_time = payload.exit_time;
+                record.is_offline_pending = true; // 変更ありとしてマーク
+            }
+
+        } else if (item.action === 'qr_process') {
+            // QR: トグル動作
+            const activeRecord = optimisticList.find(r => String(r.system_id) === String(sysId) && !r.exit_time);
+
+            if (activeRecord) {
+                // 退室処理
+                activeRecord.exit_time = payload.timestamp;
+                activeRecord.is_offline_pending = true;
+            } else {
+                // 入室処理
+                let studentInfo = { name: '不明', grade: '', class: '', student_number: '' };
+                const sObj = findStudentObjectBySystemId(sysId);
+                if (sObj) {
+                    studentInfo = {
+                        grade: sObj.grade,
+                        class: sObj.class,
+                        // 修正: 正しいプロパティを使用
+                        student_number: sObj.student_number,
+                        name: sObj.name
+                    };
+                }
+                const newRecord = {
+                    log_id: item.id,
+                    system_id: sysId,
+                    seat_number: 'QR',
+                    entry_time: payload.timestamp,
+                    exit_time: null,
+                    ...studentInfo,
+                    is_offline_pending: true
+                };
+                optimisticList.push(newRecord);
+            }
+        }
+    });
+
+    // 3. 入室時間の昇順でソート（表示順序を維持）
+    optimisticList.sort((a, b) => new Date(a.entry_time) - new Date(b.entry_time));
+
+    return optimisticList;
+}
+
 function renderAttendanceTable() {
+    // フェーズ2修正: サーバー生データではなく、オフライン反映済みのリストを取得
+    const fullList = getOptimisticAttendees();
+
     // 表示対象リストのフィルタリング
     // adminモードまたはscannerモードの場合は全リストを表示し、それ以外（studentsモード）は手動入室者のみ表示
-    const list = (APP_MODE === 'admin' || APP_MODE === 'scanner') ? currentAttendees : currentAttendees.filter(s => s.seat_number);
+    const list = (APP_MODE === 'admin' || APP_MODE === 'scanner') ? fullList : fullList.filter(s => s.seat_number);
 
     // 1. データがない場合の表示処理
     if (list.length === 0) {
@@ -1111,11 +1199,12 @@ function renderAttendanceTable() {
     }
 
     // 2. 削除されたデータの行をDOMから削除
-    // 表示すべきlog_idのセットを作成
-    const activeLogIds = new Set(list.map(s => s.log_id));
+    // フェーズ2修正: IDを文字列として扱い、temp_idに対応
+    const activeLogIds = new Set(list.map(s => String(s.log_id)));
+    
     // 画面上の全行を確認し、リストにないものを削除
     Array.from(dom.attendanceTableBody.rows).forEach(row => {
-        const rowLogId = parseInt(row.dataset.logId);
+        const rowLogId = row.dataset.logId; // 文字列として取得
         if (rowLogId && !activeLogIds.has(rowLogId)) {
             row.remove();
         }
@@ -1135,6 +1224,17 @@ function renderAttendanceTable() {
         }
 
         // --- 行スタイルの更新 ---
+        // フェーズ2追加: オフライン状態のクラス適用
+        if (student.is_offline_pending) {
+            row.classList.add('offline-pending');
+            // 退室済みであれば取り消し線スタイルも追加
+            if (student.exit_time) {
+                row.classList.add('offline-cancelled');
+            }
+        } else {
+            row.classList.remove('offline-pending', 'offline-cancelled');
+        }
+
         if (student.exit_time) {
             if (!row.classList.contains('exited-row')) row.classList.add('exited-row');
         } else {
@@ -1193,13 +1293,23 @@ function renderAttendanceTable() {
         if (!actionCell.classList.contains('action-cell')) actionCell.classList.add('action-cell');
 
         if (student.exit_time) {
-            // 退室済み：時刻を表示
-            const exitTimeText = new Date(student.exit_time).toLocaleTimeString('ja-JP');
-            if (actionCell.textContent !== exitTimeText) {
-                actionCell.textContent = exitTimeText;
+            // 退室済み
+            // 修正: オフライン待機中の場合は、時刻表示ではなく「同期待ち」ボタンを表示する仕様に変更
+            // これにより、退室ボタンを押した直後の見た目の変化（ボタン変化）を優先させる
+            if (student.is_offline_pending) {
+                actionCell.innerHTML = `<button class="offline-wait-btn" disabled>同期待ち</button>`;
+            } else {
+                // 通常の退室済み表示
+                const exitTimeText = new Date(student.exit_time).toLocaleTimeString('ja-JP');
+                if (actionCell.textContent !== exitTimeText) {
+                    actionCell.textContent = exitTimeText;
+                }
             }
         } else {
             // 在室中
+            // 修正: オフライン入室直後（送信待ち）であっても、退室操作は可能にするため
+            // ここでの「同期待ち」ボタン強制表示ロジックは削除し、通常の退室ボタンを表示させる。
+            
             // 【重要】退室カウントダウン中かどうかを確認
             if (exitTimers[student.log_id]) {
                 // カウントダウン中（退室処理中）なら、DOMを書き換えない！
@@ -1208,7 +1318,8 @@ function renderAttendanceTable() {
                 // カウントダウン中でない場合
                 const btn = actionCell.querySelector('button');
                 // ボタンがない、または「取消」ボタンが残ってしまっている（状態不整合）場合は初期化
-                if (!btn || btn.classList.contains('undo-btn')) {
+                // または、以前が「同期待ち」ボタンだった場合も再生成して「退室」ボタンに戻す
+                if (!btn || btn.classList.contains('undo-btn') || btn.classList.contains('offline-wait-btn')) {
                      actionCell.innerHTML = `<button class="exit-list-btn" data-log-id="${student.log_id}" data-system-id="${student.system_id}">退室</button>`;
                 } else {
                     // 既に退室ボタンがあるなら、ID属性の念のための更新のみ
@@ -1361,117 +1472,128 @@ function findStudentNameBySystemId(systemId) {
 /**
  * オフライン時のアクションをキューに保存する
  */
+/**
+ * オフライン時のアクションをキューに保存する
+ * フェーズ1修正: temp_idの発行とデータ構造の正規化
+ */
 function saveToOfflineQueue(actionType, payload, toastMessage = null) {
-    // 現在時刻を記録（サーバー送信時に使用）
-    // 手動入退室ではすでにpayloadに時刻が含まれる場合があるが、
-    // QR処理などのためにここで一律付与または確認する
-    
-    // 修正: 条件分岐を見直し、アクションタイプに応じて適切なキーで時刻を保存する
-    if (actionType === 'check_in') {
-        // 手動入室: entry_timeが必要
-        if (!payload.entry_time) {
-            payload.entry_time = new Date().toISOString();
-        }
-    } else if (actionType === 'check_out') {
-        // 手動退室: exit_timeが必要
-        if (!payload.exit_time) {
-            payload.exit_time = new Date().toISOString();
-        }
-    } else {
-        // QR処理など (actionType === 'qr_process'): timestampが必要
-        if (!payload.timestamp && !payload.entry_time && !payload.exit_time) {
-            payload.timestamp = new Date().toISOString();
-        }
+    // 1. 一意な一時ID (temp_id) を発行（DOM操作や後続の処理で追跡するため）
+    // 既存のpayloadにtemp_idがない場合のみ生成
+    if (!payload.temp_id) {
+        payload.temp_id = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
 
+    // 2. タイムスタンプの正規化
+    // サーバーが必要とする時刻フィールドを確実に埋める
+    const nowISO = new Date().toISOString();
+    
+    if (actionType === 'check_in') {
+        if (!payload.entry_time) payload.entry_time = nowISO;
+    } else if (actionType === 'check_out') {
+        if (!payload.exit_time) payload.exit_time = nowISO;
+    } else {
+        // qr_process等
+        if (!payload.timestamp) payload.timestamp = nowISO;
+    }
+
+    // 3. キューアイテムの作成
     const item = {
+        id: payload.temp_id, // キュー管理用ID
         action: actionType,
         payload: payload,
-        queuedAt: new Date().toISOString()
+        queuedAt: nowISO,
+        retryCount: 0 // 将来的なリトライ制御用
     };
     
+    // 4. 保存
     offlineQueue.push(item);
     localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
     
-    // 具体的で安心感のあるメッセージを表示
+    // 5. 通知
     const msg = toastMessage || `データを保存しました (オフライン)。復帰時に送信されます。`;
     showToast(msg, null);
+
+    return item; // 呼び出し元でUI更新に使えるようitemを返す
 }
 
 /**
  * オフラインキューに溜まったデータを順次送信する
+ */
+/**
+ * オフラインキューに溜まったデータを順次送信する
+ * フェーズ1修正: エラーハンドリングの強化（A案：サーバーエラーはスキップして進行）
  */
 async function processOfflineQueue() {
     // 既に実行中、キューが空、または（オフラインかつローカルでない）場合は何もしない
     if (isSyncing || offlineQueue.length === 0 || (!navigator.onLine && !IS_LOCALHOST)) return;
 
     isSyncing = true; // ロック開始
+    let hasChanges = false; // 1件でも処理（成功または破棄）が進んだか
 
     try {
         console.log(`オフラインキューの同期を開始します (${offlineQueue.length}件)`);
         
-        // 初回のみトーストを出す（定期実行で毎回出るとうるさいため、consoleのみにするか、控えめな表示にする）
-        // ここでは通常通り表示しますが、必要に応じて調整してください
-        // showToast(`通信復帰: ${offlineQueue.length}件のデータを送信中...`); 
-
-        // 配列のコピーを作成して処理（処理成功したものから削除するため）
-        const queueToProcess = [...offlineQueue];
-        let successCount = 0;
-
-        for (const item of queueToProcess) {
+        // 元の配列を参照しながら先頭から順に処理する
+        // ※ ループ内で offlineQueue.shift() を行うため、インデックスではなく「キューが空になるまで or 中断するまで」繰り返す
+        while (offlineQueue.length > 0) {
+            const item = offlineQueue[0]; // 先頭を取得
+            
             let url = '';
             if (item.action === 'check_in') url = '/api/check_in';
             else if (item.action === 'check_out') url = '/api/check_out';
             else if (item.action === 'qr_process') url = '/api/qr_process';
 
-            // タイムアウト設定を追加（サーバーが応答しない場合に長時間ロックするのを防ぐ）
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
             try {
-                // 【修正】オフライン同期であることを示すフラグを追加して送信
+                // オフライン同期フラグとtemp_idを送信
                 const syncPayload = { ...item.payload, is_offline_sync: true };
 
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(syncPayload),
-                    signal: controller.signal // タイムアウト適用
+                    signal: controller.signal
                 });
                 clearTimeout(timeoutId);
 
+                // --- 結果判定 ---
                 if (response.ok) {
-                    // 送信成功したらキューから削除
-                    offlineQueue.shift(); // 先頭（一番古いもの）を削除
-                    localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
-                    successCount++;
-                } else if (response.status === 409) {
-                    console.warn('同期スキップ: 既にサーバー側で処理済みです (409 Conflict)');
-                    offlineQueue.shift();
-                    localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
-                } else {
-                    console.error('同期エラー: サーバーがエラーを返しました', response.status);
-                    // 500エラーなどの場合、サーバーは生きているが処理に失敗している可能性がある
-                    // この場合、キューを詰まらせないために次のアイテムへ進むか、
-                    // あるいはサーバー復旧待ちとしてループを抜けるか。
-                    // ここでは「サーバーダウン」の可能性が高いため、ループを抜けて次回の定期実行に委ねる
-                    break;
+                    // ケース1: 成功 (200 OK)
+                    console.log(`同期成功: ${item.action} (${item.id})`);
+                    offlineQueue.shift(); // 削除
+                    hasChanges = true;
+                
+                } else if (response.status >= 400 && response.status < 600) {
+                    // ケース2: サーバー到達したがエラー (400 Bad Request, 500 Internal Server Error, 409 Conflictなど)
+                    // 仕様(A案): エラーデータは破棄して次へ進む
+                    // 409(Conflict)も含め、サーバー側で受け入れられなかったものはローカルから消す
+                    console.warn(`同期失敗 (サーバーエラー): ${response.status} - ${item.action}. データを破棄して次へ進みます。`);
+                    offlineQueue.shift(); // 削除
+                    hasChanges = true;
                 }
+
+                // ローカルストレージを更新
+                localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
+
             } catch (error) {
                 clearTimeout(timeoutId);
-                console.error('同期通信エラー:', error);
-                // 通信エラー（タイムアウトや切断）なら処理を中断して次回に持ち越し
-                break; 
+                // ケース3: ネットワークエラー（通信切断、タイムアウト）
+                // サーバーに到達できていないため、データは保持して同期プロセス自体を中断する
+                console.error('同期中断 (通信エラー):', error);
+                break; // ループを抜ける（後続の処理もしない）
             }
         }
 
-        if (successCount > 0) {
-            showToast(`${successCount}件のデータを同期しました。`);
-            // リストを最新にする
-            fetchInitialData();
+        // 1件でも処理が進んだ（成功 or 破棄）なら、最新の状態を取得して画面をリフレッシュ
+        if (hasChanges) {
+            showToast("データの同期が完了しました。");
+            await fetchInitialData();
         }
+
     } finally {
-        isSyncing = false; // ロック解除（必ず実行）
+        isSyncing = false; // ロック解除
     }
 }
 
@@ -1502,14 +1624,22 @@ function setupSSE() {
 
 /**
  * IDから生徒オブジェクトそのものを検索するヘルパー関数
+ * 修正: 学年・組・番号の情報も結合して返す
  */
 function findStudentObjectBySystemId(systemId) {
     for (const grade in studentsData) {
         for (const cls in studentsData[grade]) {
             for (const num in studentsData[grade][cls]) {
                 const s = studentsData[grade][cls][num];
+                // 型不一致を防ぐため文字列化して比較
                 if (String(s.system_id) === String(systemId)) {
-                    return s;
+                    // 元のオブジェクトを汚さないようコピーし、キー情報を付与して返す
+                    return { 
+                        ...s, 
+                        grade: grade, 
+                        class: cls, 
+                        student_number: num // これで num (出席番号) が確実に参照できる
+                    };
                 }
             }
         }

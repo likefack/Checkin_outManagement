@@ -331,10 +331,33 @@ thead th {
 }
 .exited-row { text-decoration: line-through; color: #888; }
 .exited-row .action-cell { text-decoration: none; }
-.action-cell button { background-color: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); padding: 5px 10px; border-radius: 5px; cursor: pointer; }
-.action-cell button:hover { background-color: var(--primary-color); color: white; }
-.undo-btn { border-color: #ffc107; color: #ffc107; }
-.undo-btn:hover { background-color: #ffc107; color: white; }
+/* 退室ボタン（デフォルト）：メインカラー背景・白文字 */
+.action-cell button {
+    background-color: var(--primary-color);
+    border: 1px solid var(--primary-color);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+.action-cell button:hover {
+    background-color: var(--primary-color); /* 色を変えない */
+    color: white;
+    opacity: 0.8; /* ホバー時に少し薄くする */
+}
+
+/* 取消ボタン：赤色枠・背景透過（詳細度を上げて退室ボタンのスタイルを上書き） */
+.action-cell .undo-btn {
+    background-color: transparent;
+    border-color: var(--danger-color);
+    color: var(--danger-color);
+}
+.action-cell .undo-btn:hover {
+    background-color: transparent; /* ホバーしても背景色を変えない */
+    color: var(--danger-color);    /* 文字色も変えない */
+    opacity: 1;                    /* 必要なら透明度も固定（または0.8等） */
+}
 
 /* --- QRコード用隠し入力欄 --- */
 .qr-input-hidden { position: absolute; left: -9999px; opacity: 0; }
@@ -527,3 +550,41 @@ thead th {
 #close-settings-btn:hover {
     background-color: #5a6268;
 }
+/* --- オフライン/同期待ち状態のスタイル --- */
+/* 未送信（同期待ち）の行：薄い黄色 */
+tr.offline-pending {
+    background-color: #ffffe0 !important;
+}
+
+/* オフラインで退室済み（取り消し）：グレー文字＋取り消し線 */
+tr.offline-cancelled {
+    /* background-color: #f8f9fa !important;  ←削除：pendingの黄色背景を優先させるため */
+    color: #999;
+    text-decoration: line-through;
+}
+
+/* 取り消し線が引かれた行でも、セルの内容は読みやすくする調整 */
+tr.offline-cancelled td {
+    text-decoration: inherit;
+}
+
+/* 同期待ちボタンのスタイル */
+button.offline-wait-btn {
+    background-color: var(--primary-color); /* メインカラー */
+    color: white;
+    border: 1px solid var(--primary-color);
+    cursor: default;          /* クリック不可カーソル */
+    font-size: 0.9em;
+    padding: 5px 10px;
+    box-shadow: none;
+    opacity: 0.8;             /* 少し透過させて、通常のボタンと区別する（お好みで1.0にしてください） */
+}
+button.offline-wait-btn:hover {
+    background-color: var(--primary-color); /* ホバーしても色を変えない */
+    opacity: 0.8;
+}
+
+/* トースト通知のスタイル拡張（既存にあれば統合、なければ追加） */
+.toast.gold { background-color: #ffd700; color: #000; }
+.toast.silver { background-color: #c0c0c0; color: #000; }
+.toast.bronze { background-color: #cd7f32; color: #fff; }   
