@@ -488,7 +488,7 @@ async function checkServerHealth() {
         }
     } catch (e) {
         if (isServerOnline) {
-            showToast("警告: サーバーとの通信が切断されました");
+            showToast("警告: サーバーとの通信が確立できませんでした");
             isServerOnline = false;
         }
         dom.sidebarServerStatus.textContent = 'エラー';
