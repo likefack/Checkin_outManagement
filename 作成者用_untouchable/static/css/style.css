@@ -323,6 +323,11 @@ th, td {
     border-bottom: 1px solid var(--border-color);
 }
 
+/* 偶数行に薄いグレーの背景色を適用（可読性向上） */
+tbody tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
 thead th {
     background-color: #f2f2f2;
     position: sticky;
