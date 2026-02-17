@@ -652,6 +652,7 @@ async function handleManualEntry() {
         // フェーズ3修正: ローカル状態を更新し、テーブルを再描画
         student.is_present = true;
         renderAttendanceTable(); // 即時反映
+        scrollToBottom(); // 【追加】入室なので最下部へスクロール
         return; // API通信は行わない
     }
 
@@ -677,6 +678,7 @@ async function handleManualEntry() {
             throw new Error(`Server Error: ${response.status}`);
         }
         await processApiResponse(response);
+        scrollToBottom(); // 【追加】入室成功なので最下部へスクロール
     } catch (error) {
         clearTimeout(timeoutId);
         clearTimeout(slowNotifyId);
@@ -691,6 +693,7 @@ async function handleManualEntry() {
         // 【重要】サーバーダウン時もローカルの状態を進め、テーブルを再描画
         student.is_present = true;
         renderAttendanceTable(); // 即時反映
+        scrollToBottom(); // 【追加】入室(保存)なので最下部へスクロール
     }
 }
 
@@ -734,6 +737,10 @@ async function processQrId(rawId) {
 
     const payload = { system_id: normalizedId };
 
+    // 【追加】入室アクションかどうかを事前に判定（現在のステータスが「不在」なら入室）
+    const sObjCheck = findStudentObjectBySystemId(normalizedId);
+    const isEntryAction = sObjCheck ? !sObjCheck.is_present : true; // 生徒が見つからない場合は新規入室とみなす
+
     // オフライン判定（ローカル環境なら無視して通信試行）
     if (!navigator.onLine && !IS_LOCALHOST) {
         payload.timestamp = new Date().toISOString();
@@ -750,6 +757,7 @@ async function processQrId(rawId) {
             }
         }
         renderAttendanceTable(); // フェーズ3修正: 再描画
+        if (isEntryAction) scrollToBottom(); // 【追加】入室ならスクロール
         return;
     }
 
@@ -772,6 +780,7 @@ async function processQrId(rawId) {
             throw new Error(`Server Error: ${response.status}`);
         }
         await processApiResponse(response);
+        if (isEntryAction) scrollToBottom(); // 【追加】入室ならスクロール
     } catch (error) {
         clearTimeout(timeoutId);
         clearTimeout(slowNotifyId);
@@ -794,6 +803,7 @@ async function processQrId(rawId) {
             }
         }
         renderAttendanceTable(); // フェーズ3修正: 再描画
+        if (isEntryAction) scrollToBottom(); // 【追加】入室ならスクロール
     }
 }
 
@@ -935,6 +945,40 @@ async function finalizeExit(logId, systemId, exitTime) {
 
 async function handleExitAll() {
     if (confirm("本当に全員を退室させますか？\nこの操作は取り消せません。")) {
+        // オフライン判定（ローカル環境なら無視して通信試行）
+        if (!navigator.onLine && !IS_LOCALHOST) {
+            const activeStudents = getOptimisticAttendees().filter(s => !s.exit_time);
+            if (activeStudents.length === 0) return showToast("退室対象者がいません (オフライン)");
+
+            const exitTime = new Date().toISOString();
+            let count = 0;
+
+            activeStudents.forEach(student => {
+                const payload = {
+                    log_id: student.log_id,
+                    system_id: student.system_id,
+                    exit_time: exitTime
+                };
+                
+                // 個別のトースト通知は抑制('SILENT')してキューに追加
+                saveToOfflineQueue('check_out', payload, 'SILENT');
+
+                // ローカルの生徒マスタデータのステータスも更新
+                if (student.system_id) {
+                    const sObj = findStudentObjectBySystemId(student.system_id);
+                    if (sObj) {
+                        sObj.is_present = false;
+                        sObj.current_log_id = null;
+                    }
+                }
+                count++;
+            });
+
+            showToast(`${count}名の退室を受け付けました (オフライン)`);
+            renderAttendanceTable(); // テーブル再描画
+            return;
+        }
+
         try {
             const response = await fetch('/api/exit_all', { method: 'POST' });
             const result = await response.json();
@@ -1564,8 +1608,10 @@ function saveToOfflineQueue(actionType, payload, toastMessage = null) {
     localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
     
     // 5. 通知
-    const msg = toastMessage || `データを保存しました (オフライン)。復帰時に送信されます。`;
-    showToast(msg, null);
+    if (toastMessage !== 'SILENT') {
+        const msg = toastMessage || `データを保存しました (オフライン)。復帰時に送信されます。`;
+        showToast(msg, null);
+    }
 
     return item; // 呼び出し元でUI更新に使えるようitemを返す
 }
@@ -1874,5 +1920,19 @@ function refreshManualSelectionUI() {
         if (currentBtn && currentBtn.classList.contains('exit-btn')) {
             dom.actionButtonContainer.innerHTML = '';
         }
+    }
+}
+
+/**
+ * @function scrollToBottom
+ * @description リストの最下部にスクロールする
+ */
+function scrollToBottom() {
+    const container = document.querySelector('.table-container');
+    if (container) {
+        container.scrollTo({
+            top: container.scrollHeight,
+            behavior: 'smooth'
+        });
     }
 }
