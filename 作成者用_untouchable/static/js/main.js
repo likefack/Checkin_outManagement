@@ -39,6 +39,8 @@ let offlineQueue = JSON.parse(localStorage.getItem('offlineQueue')) || [];
 let syncErrors = JSON.parse(localStorage.getItem('syncErrors')) || [];
 // 同期処理中かどうかのフラグ
 let isSyncing = false;
+// データ取得中かどうかのフラグ
+let isFetching = false;
 // サーバー通信状態のフラグ
 let isServerOnline = true;
 
@@ -121,11 +123,13 @@ function initializePage() {
     setupSidebarLogic(); // 追加: サイドバー機能の初期化
     
     // オンライン復帰時にキューを処理するイベントリスナー
-    window.addEventListener('online', () => {
-        showToast("オンラインに復帰しました。");
-        processOfflineQueue();
-        updateNetworkStatusUI(); // 追加: UI更新
-        checkServerHealth();     // 追加: 復帰時に即座にサーバー状態を確認
+    window.addEventListener('online', async () => {
+        showToast("オンラインに復帰しました。データの同期を開始します...");
+        updateNetworkStatusUI();
+        
+        // キューの送信を最優先で完了させ、その後にヘルスチェックを行う
+        await processOfflineQueue();
+        checkServerHealth();
         
         // 【追加】復帰時にサーバー側の未送信メールも即時再送させる
         fetch('/api/trigger_email_retry', { method: 'POST' })
@@ -236,7 +240,11 @@ function updateTime() {
  * @description サーバーのAPIを叩いて、初期データを取得する
  */
 // 修正: キャッシュ回避のためにタイムスタンプ(?t=...)を付与
-async function fetchInitialData() {
+async function fetchInitialData(ignoreSyncLock = false) {
+    // 同期中（かつ強制実行でない場合）、または既に取得中の場合は重複実行を避ける
+    if ((isSyncing && !ignoreSyncLock) || isFetching) return;
+    isFetching = true;
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 2000); // 2秒でタイムアウト
 
@@ -260,6 +268,7 @@ async function fetchInitialData() {
 
         populateGradeSelect();
         renderAttendanceTable();
+        refreshManualSelectionUI(); // 追加: 選択中の生徒の状態を更新
     } catch (error) {
         clearTimeout(timeoutId);
         const isTimeout = error.name === 'AbortError';
@@ -282,6 +291,8 @@ async function fetchInitialData() {
         } else {
             showToast("エラー: サーバーに接続できず、保存されたデータもありません。");
         }
+    } finally {
+        isFetching = false;
     }
 }
 
@@ -445,7 +456,8 @@ function updateNetworkStatusUI() {
 }
 
 async function checkServerHealth() {
-    if (!dom.sidebarServerStatus) return;
+    // UI要素がない場合や、同期処理中は実行しない
+    if (!dom.sidebarServerStatus || isSyncing) return;
     // オフラインかつ、ローカル環境でない場合のみ「不明」とする
     // (ローカル環境なら、ブラウザがオフライン判定でも通信できる可能性があるため試行する)
     if (!navigator.onLine && !IS_LOCALHOST) {
@@ -466,6 +478,8 @@ async function checkServerHealth() {
             if (!isServerOnline) {
                 showToast("サーバーとの通信が復旧しました");
                 isServerOnline = true;
+                // 復旧時に最新データを取得して画面を更新
+                fetchInitialData();
             }
             dom.sidebarServerStatus.textContent = '正常';
             dom.sidebarServerStatus.style.color = '#28a745';
@@ -612,6 +626,7 @@ async function processApiResponse(response) {
 
             // テーブル再描画（fetchInitialDataを待たずに実行）
             renderAttendanceTable();
+            refreshManualSelectionUI(); // 追加: 選択中の生徒の状態を更新
         } else {
             // 万が一データがない場合は従来の全取得を行う
             await fetchInitialData();
@@ -1067,6 +1082,34 @@ function onSeatChange() {
     else dom.actionButtonContainer.innerHTML = '';
     focusQrInput();
 }
+
+/**
+ * @function refreshManualSelectionUI
+ * @description 現在選択中の生徒のステータスに基づき、手動入力エリアの表示を最新状態に更新する
+ */
+function refreshManualSelectionUI() {
+    const student = getSelectedStudent();
+    // 生徒が選択されていない、または名前が表示されていない場合は何もしない
+    if (!student || !dom.studentNameDisplay.textContent) return;
+
+    if (student.is_present) {
+        // 入室中の場合：座席選択を隠し、退室ボタンを表示
+        dom.seatSelectorItem.style.display = 'none';
+        renderActionButton('exit');
+    } else {
+        // 退室済みの構成にする
+        if (dom.seatSelectorItem.style.display !== 'block') {
+            populateSeatSelect();
+            dom.seatSelectorItem.style.display = 'block';
+        }
+        // 「退室」ボタンが表示されている場合は、ステータス不整合なので消去する
+        const currentBtn = dom.actionButtonContainer.querySelector('button');
+        if (currentBtn && currentBtn.classList.contains('exit-btn')) {
+            dom.actionButtonContainer.innerHTML = '';
+        }
+    }
+}
+
 function renderActionButton(type) {
     dom.actionButtonContainer.innerHTML = '';
     const button = document.createElement('button');
@@ -1340,8 +1383,11 @@ function renderAttendanceTable() {
 
     // リスト描画後にキャッシュを再構築し、タイマーを開始
     startDurationTimers();
+    
+    // 手動選択エリアのボタン状態も最新データと同期させる
+    refreshManualSelectionUI();
 }
-function populateSelect(selectElement, optionsArray) { 
+function populateSelect(selectElement, optionsArray) {
     optionsArray.forEach(item => {
         const option = document.createElement('option');
         option.value = item;
@@ -1620,6 +1666,7 @@ async function processOfflineQueue() {
         }
 
         // 1件でも処理が進んだ（成功 or 破棄）なら、最新の状態を取得して画面をリフレッシュ
+// 1件でも処理が進んだ（成功 or 破棄）なら、最新の状態を取得して画面をリフレッシュ
         if (hasChanges) {
             if (syncErrors.length > 0) {
                 // エラーがある場合は警告色のトースト（bronze等を流用）で通知
@@ -1628,7 +1675,8 @@ async function processOfflineQueue() {
             } else {
                 showToast("データの同期が完了しました。");
             }
-            await fetchInitialData();
+            // 同期ロックを無視して最新のサーバーデータを取得
+            await fetchInitialData(true);
         }
 
     } finally {
@@ -1800,4 +1848,31 @@ function tick() {
         }
     }
     animationFrameId = requestAnimationFrame(tick);
+}
+
+/**
+ * @function refreshManualSelectionUI
+ * @description 現在選択されている生徒のステータスに基づいて、入力エリアのボタン類を最新化する
+ */
+function refreshManualSelectionUI() {
+    const student = getSelectedStudent();
+    // 生徒が選択されていない、または名前が表示されていない場合は処理しない
+    if (!student || !dom.studentNameDisplay.textContent) return;
+
+    if (student.is_present) {
+        // 他の操作で入室中になった場合：座席選択を隠し、退室ボタンを表示
+        dom.seatSelectorItem.style.display = 'none';
+        renderActionButton('exit');
+    } else {
+        // 他の操作で退室済みになった場合：退室ボタンを消し、座席選択を表示
+        if (dom.seatSelectorItem.style.display !== 'block') {
+            populateSeatSelect();
+            dom.seatSelectorItem.style.display = 'block';
+        }
+        // 「入室」ボタンは座席が選ばれるまで表示しないので、コンテナを空にする
+        const currentBtn = dom.actionButtonContainer.querySelector('button');
+        if (currentBtn && currentBtn.classList.contains('exit-btn')) {
+            dom.actionButtonContainer.innerHTML = '';
+        }
+    }
 }
