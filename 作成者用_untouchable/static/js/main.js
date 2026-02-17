@@ -1721,6 +1721,10 @@ async function processOfflineQueue() {
             } else {
                 showToast("データの同期が完了しました。");
             }
+
+            // 【修正】サーバー側のDB反映ラグを考慮し、確実に最新データを取得するために少し待機する
+            await new Promise(resolve => setTimeout(resolve, 500));
+
             // 同期ロックを無視して最新のサーバーデータを取得
             await fetchInitialData(true);
         }
