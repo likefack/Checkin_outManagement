@@ -556,9 +556,14 @@ thead th {
     background-color: #5a6268;
 }
 /* --- オフライン/同期待ち状態のスタイル --- */
-/* 未送信（同期待ち）の行：薄い黄色 */
+/* 未送信（同期待ち）の行：薄い黄色（奇数行） */
 tr.offline-pending {
     background-color: #ffffe0 !important;
+}
+
+/* 未送信（同期待ち）の行：少し濃い黄色（偶数行）で縞模様を作る */
+tr.offline-pending:nth-child(even) {
+    background-color: #fafad2 !important; /* LightGoldenrodYellow */
 }
 
 /* オフラインで退室済み（取り消し）：グレー文字＋取り消し線 */
