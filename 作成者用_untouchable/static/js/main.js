@@ -1770,13 +1770,13 @@ function findStudentObjectBySystemId(systemId) {
                 const s = studentsData[grade][cls][num];
                 // 型不一致を防ぐため文字列化して比較
                 if (String(s.system_id) === String(systemId)) {
-                    // 元のオブジェクトを汚さないようコピーし、キー情報を付与して返す
-                    return { 
-                        ...s, 
-                        grade: grade, 
-                        class: cls, 
-                        student_number: num // これで num (出席番号) が確実に参照できる
-                    };
+                    // 修正: 状態更新（is_presentの書き換え等）をグローバル変数(studentsData)に反映させるため、
+                    // コピーではなくオブジェクトの参照そのものを返すように変更。
+                    // 必要なメタデータは参照先のオブジェクトに直接付与する。
+                    s.grade = grade;
+                    s.class = cls;
+                    s.student_number = num;
+                    return s;
                 }
             }
         }
