@@ -158,6 +158,13 @@
                     <input type="number" name="MAX_SEAT_NUMBER" placeholder="72">
                 </div>
                 <div class="form-group">
+                    <label>座席指定機能</label>
+                    <select name="USE_SEAT_NUMBER" class="styled-select">
+                        <option value="false">使用しない（デフォルト）</option>
+                        <option value="true">使用する</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <label>テーマカラー</label>
                     <div style="display: flex; gap: 10px; align-items: center;">
                         <input type="color" name="THEME_COLOR" id="settings-theme-color" value="{{ theme_color }}" style="width: 60px; padding: 0; height: 40px; cursor: pointer;">
@@ -181,7 +188,7 @@
                         <th>学年</th>
                         <th>組</th>
                         <th>番号</th>
-                        <th>座席</th>
+                        <th id="th-seat" {% if not use_seat_number %}style="display:none;"{% endif %}>座席</th>
                         <th>氏名</th>
                         <th>入室</th>
                         <th>滞在時間</th>
@@ -199,7 +206,7 @@
     </footer>
 
     {% if mode == 'admin' %}
-        <input type="text" id="qr-input" class="qr-input-hidden" autocomplete="off">
+        <input type="text" id="qr-input" class="qr-input-hidden" autocomplete="off" inputmode="none">
     {% endif %}
 
     <div id="camera-modal" class="modal-overlay" style="display: none;">
@@ -219,12 +226,13 @@
 
     <div id="toast-container"></div>
 
-    <body data-app-mode="{{ mode }}" data-max-seat-number="{{ max_seat_number }}">
+    <body data-app-mode="{{ mode }}" data-max-seat-number="{{ max_seat_number }}" data-use-seat-number="{{ 'true' if use_seat_number else 'false' }}">
     <script>
         // HTML要素からデータを取得
         const body = document.body;
         const APP_MODE = body.dataset.appMode;
         const MAX_SEAT_NUMBER = parseInt(body.dataset.maxSeatNumber, 10);
+        const USE_SEAT_NUMBER = body.dataset.useSeatNumber === 'true';
     </script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>

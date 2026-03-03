@@ -317,17 +317,26 @@ function setupEventListeners() {
     if (APP_MODE === 'admin') {
         //意図的に他の入力要素へフォーカスした場合は、QR入力欄への強制フォーカス戻しを行わない
         dom.qrInput.addEventListener('blur', (e) => {
+            if (isNavigating) return; // 画面遷移中はフォーカス強制をキャンセル
             const newTarget = e.relatedTarget;
-            // フォーカス移動先がセレクトボックス、入力、ボタン、またはカレンダー等の場合は何もしない
+            // フォーカス移動先がセレクトボックス、入力、ボタン、リンク、カレンダー等の場合は何もしない
+            // ※iPad等のSafariでは、タップ時にrelatedTargetがnullになることがある
             if (newTarget && (
                 newTarget.tagName === 'SELECT' || 
                 newTarget.tagName === 'INPUT' || 
                 newTarget.tagName === 'BUTTON' ||
-                newTarget.closest('.flatpickr-calendar')
+                newTarget.tagName === 'A' ||
+                newTarget.closest('.flatpickr-calendar') ||
+                newTarget.closest('.header-main')
             )) {
                 return;
             }
-            focusQrInput();
+            // 各種ボタンやリンクのタップ(クリック)イベントが先に処理されるように遅延させる
+            setTimeout(() => {
+                if (!isNavigating && !isCalendarOpen) {
+                    focusQrInput();
+                }
+            }, 200);
         });
         // --- 修正: IME確定(compositionend)とEnterキー(keydown)の両方で入力を検知 ---
         const processInput = (e) => {
@@ -638,8 +647,14 @@ async function processApiResponse(response) {
 
 async function handleManualEntry() {
     const student = getSelectedStudent();
-    const seatNumber = dom.seatSelect.value;
-    if (!student || !seatNumber) return showToast("生徒と座席を選択してください。");
+    let seatNumber = null;
+    
+    if (USE_SEAT_NUMBER) {
+        seatNumber = dom.seatSelect.value;
+        if (!student || !seatNumber) return showToast("生徒と座席を選択してください。");
+    } else {
+        if (!student) return showToast("生徒を選択してください。");
+    }
 
     // 【修正】API通信を待たずに即座にUIをリセットし、次の入力を可能にする
     resetAllSelectors();
@@ -1350,8 +1365,14 @@ function renderAttendanceTable() {
         if (cells[3].textContent != student.student_number) cells[3].textContent = student.student_number;
         
         // 5. 座席
-        const seatText = student.seat_number || 'QR';
-        if (cells[4].textContent !== seatText) cells[4].textContent = seatText;
+        const seatCell = cells[4];
+        if (USE_SEAT_NUMBER) {
+            seatCell.style.display = '';
+            const seatText = student.seat_number || 'QR';
+            if (seatCell.textContent !== seatText) seatCell.textContent = seatText;
+        } else {
+            seatCell.style.display = 'none';
+        }
         
         // 6. 氏名
         if (cells[5].textContent !== student.name) cells[5].textContent = student.name;
@@ -1911,15 +1932,21 @@ function refreshManualSelectionUI() {
         dom.seatSelectorItem.style.display = 'none';
         renderActionButton('exit');
     } else {
-        // 他の操作で退室済みになった場合：退室ボタンを消し、座席選択を表示
-        if (dom.seatSelectorItem.style.display !== 'block') {
-            populateSeatSelect();
-            dom.seatSelectorItem.style.display = 'block';
-        }
-        // 「入室」ボタンは座席が選ばれるまで表示しないので、コンテナを空にする
-        const currentBtn = dom.actionButtonContainer.querySelector('button');
-        if (currentBtn && currentBtn.classList.contains('exit-btn')) {
-            dom.actionButtonContainer.innerHTML = '';
+        // 他の操作で退室済みになった場合：設定に応じてUIを変える
+        if (USE_SEAT_NUMBER) {
+            if (dom.seatSelectorItem.style.display !== 'block') {
+                populateSeatSelect();
+                dom.seatSelectorItem.style.display = 'block';
+            }
+            // 「入室」ボタンは座席が選ばれるまで表示しないので、コンテナを空にする
+            const currentBtn = dom.actionButtonContainer.querySelector('button');
+            if (currentBtn && currentBtn.classList.contains('exit-btn')) {
+                dom.actionButtonContainer.innerHTML = '';
+            }
+        } else {
+            // 座席指定なしの場合は座席選択を隠し、すぐに入室ボタンを表示
+            dom.seatSelectorItem.style.display = 'none';
+            renderActionButton('enter');
         }
     }
 }

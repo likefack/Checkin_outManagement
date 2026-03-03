@@ -284,7 +284,8 @@ def index():
         return render_template('edit.html', app_name=app_name, org_name_eng=org_name_eng, return_mode=return_mode)
     else:
         max_seat_number = int(os.getenv('MAX_SEAT_NUMBER', 72))
-        return render_template('index.html', mode=mode, app_name=app_name, max_seat_number=max_seat_number, org_name_eng=org_name_eng)
+        use_seat_number = os.getenv('USE_SEAT_NUMBER', 'false').lower() in ('true', '1', 't', 'yes')
+        return render_template('index.html', mode=mode, app_name=app_name, max_seat_number=max_seat_number, org_name_eng=org_name_eng, use_seat_number=use_seat_number)
 
 # --- API ---
 @app.route('/api/initial_data')
@@ -732,7 +733,7 @@ def handle_create_report():
 @app.route('/api/settings', methods=['GET', 'POST'])
 def manage_settings():
     # 編集を許可するキーのリスト
-    ALLOWED_KEYS = ['APP_NAME', 'ORGANIZATION_NAME', 'ORGANIZATION_NAME_ENG', 'MAX_SEAT_NUMBER', 'THEME_COLOR']
+    ALLOWED_KEYS = ['APP_NAME', 'ORGANIZATION_NAME', 'ORGANIZATION_NAME_ENG', 'MAX_SEAT_NUMBER', 'THEME_COLOR', 'USE_SEAT_NUMBER']
     
     if request.method == 'GET':
         settings = {key: os.getenv(key, '') for key in ALLOWED_KEYS}
