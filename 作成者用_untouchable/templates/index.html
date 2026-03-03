@@ -157,12 +157,12 @@
                     <label>最大座席数</label>
                     <input type="number" name="MAX_SEAT_NUMBER" placeholder="72">
                 </div>
-                <div class="form-group">
-                    <label>座席指定機能</label>
-                    <select name="USE_SEAT_NUMBER" class="styled-select">
-                        <option value="false">使用しない（デフォルト）</option>
-                        <option value="true">使用する</option>
-                    </select>
+                <div class="form-group" style="display: flex; justify-content: space-between; align-items: center;">
+                    <label style="margin-bottom: 0;">座席指定機能</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" name="USE_SEAT_NUMBER" value="true">
+                        <span class="toggle-slider"></span>
+                    </label>
                 </div>
                 <div class="form-group">
                     <label>テーマカラー</label>

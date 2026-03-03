@@ -597,3 +597,44 @@ button.offline-wait-btn:hover {
 .toast.gold { background-color: #ffd700; color: #000; }
 .toast.silver { background-color: #c0c0c0; color: #000; }
 .toast.bronze { background-color: #cd7f32; color: #fff; }   
+
+/* --- トグルスイッチのスタイル --- */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 26px;
+}
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+    border-radius: 26px;
+}
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+.toggle-switch input:checked + .toggle-slider {
+    background-color: #4cd964;
+}
+.toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(24px);
+}   

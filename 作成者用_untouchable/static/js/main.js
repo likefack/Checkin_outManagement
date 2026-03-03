@@ -518,8 +518,13 @@ async function openSettingsModal() {
             if (form) {
                 // 各入力欄に値をセット
                 Object.keys(data).forEach(key => {
-                    if (form.elements[key]) {
-                        form.elements[key].value = data[key];
+                    const el = form.elements[key];
+                    if (el) {
+                        if (el.type === 'checkbox') {
+                            el.checked = (String(data[key]) === 'true');
+                        } else {
+                            el.value = data[key];
+                        }
                     }
                 });
                 // 取得した色をプレビューに反映
@@ -551,6 +556,11 @@ async function handleSettingsSave(e) {
 
     const formData = new FormData(dom.settingsForm);
     const data = Object.fromEntries(formData.entries());
+
+    const checkboxes = dom.settingsForm.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+        data[cb.name] = cb.checked ? 'true' : 'false';
+    });
 
     try {
         const res = await fetch('/api/settings', {
@@ -654,6 +664,7 @@ async function handleManualEntry() {
         if (!student || !seatNumber) return showToast("生徒と座席を選択してください。");
     } else {
         if (!student) return showToast("生徒を選択してください。");
+        seatNumber = '座席なし';
     }
 
     // 【修正】API通信を待たずに即座にUIをリセットし、次の入力を可能にする
@@ -1214,7 +1225,7 @@ function getOptimisticAttendees() {
             const newRecord = {
                 log_id: item.id, // temp_idを表示用IDとして使用
                 system_id: sysId,
-                seat_number: payload.seat_number || 'QR', // 座席情報
+                seat_number: payload.seat_number || '座席なし', // 座席情報
                 entry_time: payload.entry_time,
                 exit_time: null,
                 ...studentInfo,
@@ -1263,7 +1274,7 @@ function getOptimisticAttendees() {
                 const newRecord = {
                     log_id: item.id,
                     system_id: sysId,
-                    seat_number: 'QR',
+                    seat_number: '座席なし',
                     entry_time: payload.timestamp,
                     exit_time: null,
                     ...studentInfo,
@@ -1368,7 +1379,7 @@ function renderAttendanceTable() {
         const seatCell = cells[4];
         if (USE_SEAT_NUMBER) {
             seatCell.style.display = '';
-            const seatText = student.seat_number || 'QR';
+            const seatText = student.seat_number || '座席なし';
             if (seatCell.textContent !== seatText) seatCell.textContent = seatText;
         } else {
             seatCell.style.display = 'none';
