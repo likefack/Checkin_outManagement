@@ -367,7 +367,7 @@ def check_in():
         return jsonify({'status': 'error', 'message': 'IDがありません。'}), 400
         
     if not seat_number:
-        seat_number = '座席なし'
+        seat_number = '指定なし'
 
     conn = get_db_connection()
     try:
@@ -626,7 +626,7 @@ def qr_process():
             else:
                 entry_time_utc = datetime.datetime.now(UTC)
 
-            cursor = conn.execute('INSERT INTO attendance_logs (system_id, entry_time, seat_number) VALUES (?, ?, ?)', (system_id, entry_time_utc.isoformat(), '座席なし'))
+            cursor = conn.execute('INSERT INTO attendance_logs (system_id, entry_time, seat_number) VALUES (?, ?, ?)', (system_id, entry_time_utc.isoformat(), '指定なし'))
             new_log_id = cursor.lastrowid
             conn.execute('UPDATE students SET is_present = 1, current_log_id = ? WHERE system_id = ?', (new_log_id, system_id))
             message = f'{student["name"]}さんが自習室に入室しました。'
