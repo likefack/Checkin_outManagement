@@ -1105,16 +1105,22 @@ function onClassChange() {
     }
     dom.classSelect.blur();
 }
-function onSeatChange() {
-    const selectedSeat = dom.seatSelect.value;
-    if (selectedSeat) renderActionButton('enter');
-    else dom.actionButtonContainer.innerHTML = '';
-    dom.seatSelect.blur();
+function onNumberChange() {
+    const student = getSelectedStudent();
+    if (student) {
+        dom.studentNameDisplay.textContent = student.name;
+        dom.studentNameContainer.style.display = 'block';
+        refreshManualSelectionUI();
+    } else {
+        clearStudentInfo();
+    }
+    dom.numberSelect.blur();
 }
 function onSeatChange() {
     const selectedSeat = dom.seatSelect.value;
     if (selectedSeat) renderActionButton('enter');
     else dom.actionButtonContainer.innerHTML = '';
+    dom.seatSelect.blur();
     focusQrInput();
 }
 
