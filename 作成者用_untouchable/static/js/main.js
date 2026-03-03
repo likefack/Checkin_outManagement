@@ -1089,7 +1089,7 @@ function onGradeChange() {
         populateSelect(dom.classSelect, classes);
         dom.classSelect.disabled = false;
     }
-    focusQrInput();
+    dom.gradeSelect.blur();
 }
 function onClassChange() {
     const selectedGrade = dom.gradeSelect.value;
@@ -1103,22 +1103,13 @@ function onClassChange() {
         populateSelect(dom.numberSelect, numbers);
         dom.numberSelect.disabled = false;
     }
-    focusQrInput();
+    dom.classSelect.blur();
 }
-function onNumberChange() {
-    clearStudentInfo();
-    const student = getSelectedStudent();
-    if (student) {
-        dom.studentNameContainer.style.display = 'block';
-        dom.studentNameDisplay.textContent = student.name;
-        if (student.is_present) {
-            renderActionButton('exit');
-        } else {
-            populateSeatSelect();
-            dom.seatSelectorItem.style.display = 'block';
-        }
-    }
-    focusQrInput();
+function onSeatChange() {
+    const selectedSeat = dom.seatSelect.value;
+    if (selectedSeat) renderActionButton('enter');
+    else dom.actionButtonContainer.innerHTML = '';
+    dom.seatSelect.blur();
 }
 function onSeatChange() {
     const selectedSeat = dom.seatSelect.value;

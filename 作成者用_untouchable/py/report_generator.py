@@ -4,6 +4,7 @@ import os
 import datetime
 import pytz
 import logging
+import shutil
 
 logger = logging.getLogger(__name__)
 
@@ -358,6 +359,18 @@ def create_report(db_path, start_date_str, end_date_str):
             
             occupancy_pivot.index.name = '時間帯'
             occupancy_pivot.to_excel(writer, sheet_name='時間帯別在室人数サマリー')
+
+        # --- 追加: 2つ目の指定パスへのコピー処理 ---
+        secondary_dir = r"C:\Users\kober\OneDrive\デスクトップ\01　日々の業務（日報、質問ログ、入退さん）\入退さん\カード忘れ_iPad"
+        try:
+            if not os.path.exists(secondary_dir):
+                os.makedirs(secondary_dir)
+            
+            secondary_file_path = os.path.join(secondary_dir, os.path.basename(file_path))
+            shutil.copy2(file_path, secondary_file_path)
+            logger.info(f"レポートを2つ目のパスにもコピーしました: {secondary_file_path}")
+        except Exception as copy_e:
+            logger.warning(f"2つ目のパスへのコピーに失敗しました: {copy_e}")
 
         return file_path, f"レポートが正常に作成されました: {os.path.basename(file_path)}"
         
