@@ -338,10 +338,12 @@ function setupEventListeners() {
                 }
             }, 200);
         });
-        // --- 修正: IME対策とスキャナのEnterキーなし設定への対応 ---
-        // 謎の入力欄（IMEコンポジションボックス）が表示されるのを防ぐため、
-        // フィールドのtypeをpasswordに変更してIMEを強制的に無効化します。
-        dom.qrInput.type = 'password';
+        // --- 修正: IME・パスワードマネージャー対策と自動送信 ---
+        // passwordタイプだとブラウザのパスワード保存ポップアップが出てしまうため、
+        // type="url" と autocomplete="off" を使用して、パスワードマネージャーを回避しつつ
+        // デフォルトで半角英数入力モード（IMEオフ）になるように誘導します。
+        dom.qrInput.type = 'url';
+        dom.qrInput.setAttribute('autocomplete', 'off');
 
         let qrDebounceTimer = null;
 
@@ -360,7 +362,14 @@ function setupEventListeners() {
             clearTimeout(qrDebounceTimer);
             qrDebounceTimer = setTimeout(() => {
                 if (dom.qrInput.value) {
+                    // 万が一IME変換中の場合、フォーカスを一瞬外す(blur)ことで強制確定・消去させる
+                    dom.qrInput.blur();
                     handleQrInput({ target: dom.qrInput });
+                    
+                    // 処理完了後、少し待ってからフォーカスを戻し連続スキャンに備える
+                    setTimeout(() => {
+                        if (!isCalendarOpen) dom.qrInput.focus();
+                    }, 50);
                 }
             }, 200);
         };
