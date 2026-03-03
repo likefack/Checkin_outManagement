@@ -338,21 +338,35 @@ function setupEventListeners() {
                 }
             }, 200);
         });
-        // --- 修正: IME確定(compositionend)とEnterキー(keydown)の両方で入力を検知 ---
-        const processInput = (e) => {
-            // IME入力中のEnterキーイベントは無視（compositionendで処理するため）
-            if (e.type === 'keydown' && e.isComposing) return;
-            
-            // IME確定時、またはEnterキーが押された時に処理を実行
-            if (e.type === 'compositionend' || (e.type === 'keydown' && e.key === 'Enter')) {
-                // keydownのEnterならデフォルトのフォーム送信動作等を防ぐ
-                if (e.type === 'keydown') e.preventDefault();
+        // --- 修正: IME対策とスキャナのEnterキーなし設定への対応 ---
+        // 謎の入力欄（IMEコンポジションボックス）が表示されるのを防ぐため、
+        // フィールドのtypeをpasswordに変更してIMEを強制的に無効化します。
+        dom.qrInput.type = 'password';
+
+        let qrDebounceTimer = null;
+
+        const processInputOnEnter = (e) => {
+            // Enterキーが送信された場合は即座に処理を実行
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                clearTimeout(qrDebounceTimer);
                 handleQrInput(e);
             }
         };
 
-        dom.qrInput.addEventListener('keydown', processInput); 
-        dom.qrInput.addEventListener('compositionend', processInput);
+        const processInputOnTimeout = (e) => {
+            // スキャナがEnterキーを送信しない場合への対策
+            // 文字入力が連続している間はタイマーをリセットし、入力が200ms途切れたら処理を実行
+            clearTimeout(qrDebounceTimer);
+            qrDebounceTimer = setTimeout(() => {
+                if (dom.qrInput.value) {
+                    handleQrInput({ target: dom.qrInput });
+                }
+            }, 200);
+        };
+
+        dom.qrInput.addEventListener('keydown', processInputOnEnter);
+        dom.qrInput.addEventListener('input', processInputOnTimeout);
 
         dom.createReportBtn.addEventListener('click', handleCreateReport);
     }
